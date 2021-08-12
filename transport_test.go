@@ -26,11 +26,6 @@ import (
 	"log"
 	mrand "math/rand"
 	"net"
-	. "net/http"
-	"net/http/httptest"
-	"net/http/httptrace"
-	"net/http/httputil"
-	"net/http/internal"
 	"net/textproto"
 	"net/url"
 	"os"
@@ -44,6 +39,11 @@ import (
 	"testing/iotest"
 	"time"
 
+	. "github.com/ooni/oohttp"
+	"github.com/ooni/oohttp/httptest"
+	"github.com/ooni/oohttp/httptrace"
+	"github.com/ooni/oohttp/httputil"
+	"github.com/ooni/oohttp/internal"
 	"golang.org/x/net/http/httpguts"
 )
 

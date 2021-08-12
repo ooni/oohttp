@@ -7,10 +7,11 @@ package cookiejar_test
 import (
 	"fmt"
 	"log"
-	"net/http"
-	"net/http/cookiejar"
-	"net/http/httptest"
 	"net/url"
+
+	"github.com/ooni/oohttp"
+	"github.com/ooni/oohttp/cookiejar"
+	"github.com/ooni/oohttp/httptest"
 )
 
 func ExampleNew() {

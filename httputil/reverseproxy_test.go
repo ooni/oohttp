@@ -14,8 +14,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"os"
 	"reflect"
@@ -25,6 +23,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/ooni/oohttp"
+	"github.com/ooni/oohttp/httptest"
 )
 
 const fakeHopHeader = "X-Fake-Hop-Header-For-Test"

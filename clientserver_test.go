@@ -17,9 +17,6 @@ import (
 	"io"
 	"log"
 	"net"
-	. "net/http"
-	"net/http/httptest"
-	"net/http/httputil"
 	"net/url"
 	"os"
 	"reflect"
@@ -30,6 +27,10 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	. "github.com/ooni/oohttp"
+	"github.com/ooni/oohttp/httptest"
+	"github.com/ooni/oohttp/httputil"
 )
 
 type clientServerTest struct {

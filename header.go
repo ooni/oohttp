@@ -6,12 +6,13 @@ package http
 
 import (
 	"io"
-	"net/http/httptrace"
 	"net/textproto"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ooni/oohttp/httptrace"
 )
 
 // A Header represents the key-value pairs in an HTTP header.

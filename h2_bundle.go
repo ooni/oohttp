@@ -34,7 +34,6 @@ import (
 	"math"
 	mathrand "math/rand"
 	"net"
-	"net/http/httptrace"
 	"net/textproto"
 	"net/url"
 	"os"
@@ -47,6 +46,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ooni/oohttp/httptrace"
 	"golang.org/x/net/http/httpguts"
 	"golang.org/x/net/http2/hpack"
 	"golang.org/x/net/idna"

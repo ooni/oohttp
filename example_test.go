@@ -9,9 +9,10 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
+
+	"github.com/ooni/oohttp"
 )
 
 func ExampleHijacker() {

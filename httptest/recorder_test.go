@@ -7,8 +7,9 @@ package httptest
 import (
 	"fmt"
 	"io"
-	"net/http"
 	"testing"
+
+	"github.com/ooni/oohttp"
 )
 
 func TestRecorder(t *testing.T) {

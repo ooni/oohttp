@@ -18,7 +18,6 @@ import (
 	"mime"
 	"mime/multipart"
 	"net"
-	"net/http/httptrace"
 	"net/textproto"
 	"net/url"
 	urlpkg "net/url"
@@ -26,6 +25,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ooni/oohttp/httptrace"
 	"golang.org/x/net/idna"
 )
 

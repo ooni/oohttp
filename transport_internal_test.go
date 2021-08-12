@@ -12,9 +12,10 @@ import (
 	"errors"
 	"io"
 	"net"
-	"net/http/internal"
 	"strings"
 	"testing"
+
+	"github.com/ooni/oohttp/internal"
 )
 
 // Issue 15446: incorrect wrapping of errors when server closes an idle connection.
