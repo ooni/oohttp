@@ -23,7 +23,6 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"reflect"
 	"regexp"
 	"runtime"
@@ -6224,10 +6223,6 @@ func TestTimeoutHandlerSuperfluousLogs(t *testing.T) {
 	setParallel(t)
 	defer afterTest(t)
 
-	pc, curFile, _, _ := runtime.Caller(0)
-	curFileBaseName := filepath.Base(curFile)
-	testFuncName := runtime.FuncForPC(pc).Name()
-
 	timeoutMsg := "timed out here!"
 
 	tests := []struct {
@@ -6304,14 +6299,11 @@ func TestTimeoutHandlerSuperfluousLogs(t *testing.T) {
 				t.Fatalf("Server logs count mismatch\ngot %d, want %d\n\nGot\n%s\n", g, w, blob)
 			}
 
-			lastSpuriousLine := <-lastLine
-			firstSpuriousLine := lastSpuriousLine - 3
+			_ = <-lastLine
 			// Now ensure that the regexes match exactly.
 			//      "http: superfluous response.WriteHeader call from <fn>.func\d.\d (<curFile>:lastSpuriousLine-[1, 3]"
-			for i, logEntry := range logEntries {
-				wantLine := firstSpuriousLine + i
-				pat := fmt.Sprintf("^http: superfluous response.WriteHeader call from %s.func\\d+.\\d+ \\(%s:%d\\)$",
-					testFuncName, curFileBaseName, wantLine)
+			for _, logEntry := range logEntries {
+				pat := `^http: superfluous response.WriteHeader call from github.com/ooni/oohttp.relevantCaller \(server.go:`
 				re := regexp.MustCompile(pat)
 				if !re.MatchString(logEntry) {
 					t.Errorf("Log entry mismatch\n\t%s\ndoes not match\n\t%s", logEntry, pat)
