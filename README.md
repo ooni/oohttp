@@ -13,7 +13,9 @@ https://github.com/refraction-networking/utls).
 git remote add golang git@github.com:golang/go.git || git fetch golang
 git branch -D golang-upstream golang-http-upstream
 git checkout -b golang-upstream go1.16.7
-git subtree split -P src/crypto/http/ -b golang-http-upstream
-git checkout main
+git subtree split -P src/net/http/ -b golang-http-upstream
+git checkout merged-main
 git merge golang-http-upstream
+git push merged-main
+# then review and merge the PR creating a merge commit
 ```
