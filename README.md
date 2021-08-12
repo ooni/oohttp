@@ -43,6 +43,11 @@ writing this note we are at Go 1.16 and this package accordingly
 uses `io.ReadAll`. If you are compiling using Go 1.15, you should
 get build errors because `io.ReadAll` did not exist before Go 1.16.
 
+## Issue tracker
+
+Please, report issues in the [ooni/probe](https://github.com/ooni/probe)
+repository. Make sure you mention `ootls` in the issue title.
+
 ## Patches
 
 We started from the `src/net/http` subtree at `go1.16` and we
