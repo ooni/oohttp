@@ -46,7 +46,7 @@ get build errors because `io.ReadAll` did not exist before Go 1.16.
 ## Issue tracker
 
 Please, report issues in the [ooni/probe](https://github.com/ooni/probe)
-repository. Make sure you mention `ootls` in the issue title.
+repository. Make sure you mention `oohttp` in the issue title.
 
 ## Patches
 
