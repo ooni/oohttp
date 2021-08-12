@@ -8,7 +8,7 @@ https://github.com/refraction-networking/utls).
 ## Motivation and maintenance
 
 This package exists because we need it at [OONI](https://github.com/ooni) to
-simplify our job of testing URLs using specific TLS Client Hellos. We will
+simplify testing URLs using specific TLS Client Hello messages. We will
 continue to keep it up to date as long as it serves our goals.
 
 ## Usage and limitations
