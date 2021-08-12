@@ -4205,7 +4205,7 @@ func TestTransportAutomaticHTTP2_DefaultTransport(t *testing.T) {
 
 func TestTransportAutomaticHTTP2_TLSNextProto(t *testing.T) {
 	testTransportAutoHTTP(t, &Transport{
-		TLSNextProto: make(map[string]func(string, *tls.Conn) RoundTripper),
+		TLSNextProto: make(map[string]func(string, TLSConn) RoundTripper),
 	}, false)
 }
 
@@ -4313,7 +4313,7 @@ func TestNoCrashReturningTransportAltConn(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		if err := sc.(*tls.Conn).Handshake(); err != nil {
+		if err := sc.(TLSConn).Handshake(); err != nil {
 			t.Error(err)
 			return
 		}
@@ -4332,8 +4332,8 @@ func TestNoCrashReturningTransportAltConn(t *testing.T) {
 
 	tr := &Transport{
 		DisableKeepAlives: true,
-		TLSNextProto: map[string]func(string, *tls.Conn) RoundTripper{
-			"foo": func(authority string, c *tls.Conn) RoundTripper {
+		TLSNextProto: map[string]func(string, TLSConn) RoundTripper{
+			"foo": func(authority string, c TLSConn) RoundTripper {
 				madeRoundTripper <- true
 				return funcRoundTripper(func() {
 					t.Error("foo RoundTripper should not be called")
@@ -5529,8 +5529,8 @@ func TestTransportClone(t *testing.T) {
 		GetProxyConnectHeader:  func(context.Context, *url.URL, string) (Header, error) { return nil, nil },
 		MaxResponseHeaderBytes: 1,
 		ForceAttemptHTTP2:      true,
-		TLSNextProto: map[string]func(authority string, c *tls.Conn) RoundTripper{
-			"foo": func(authority string, c *tls.Conn) RoundTripper { panic("") },
+		TLSNextProto: map[string]func(authority string, c TLSConn) RoundTripper{
+			"foo": func(authority string, c TLSConn) RoundTripper { panic("") },
 		},
 		ReadBufferSize:  1,
 		WriteBufferSize: 1,
