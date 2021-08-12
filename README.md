@@ -64,6 +64,8 @@ minor changes (e.g., updating docs) directly on the `main` branch.
 
 (Adapted from refraction-networking/utls instructions.)
 
+1. run the following commands:
+
 ```
 git remote add golang git@github.com:golang/go.git || git fetch golang
 git branch -D golang-upstream golang-http-upstream
@@ -72,5 +74,9 @@ git subtree split -P src/net/http/ -b golang-http-upstream
 git checkout merged-main
 git merge golang-http-upstream
 git push merged-main
-# then review and merge the PR creating a merge commit
 ```
+
+2. make sure the codebase does not assume `*net.Conn` anywhere (every
+merge may introduce new changes);
+
+3. open a pull request on github and merge it with merge commit.
