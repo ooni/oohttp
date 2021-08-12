@@ -9,11 +9,12 @@ import (
 	"fmt"
 	"io"
 	"log"
-	. "net/http"
 	"reflect"
 	"strconv"
 	"strings"
 	"testing"
+
+	. "github.com/ooni/oohttp"
 )
 
 var sniffTests = []struct {
