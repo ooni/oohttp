@@ -7,9 +7,9 @@ https://github.com/refraction-networking/utls).
 
 ## Motivation and maintenance
 
-We created this package because it simplifies testing URLs using
-specific TLS Client Hello messages. We will continue to keep it up
-to date as long as it serves our goals.
+We created this package [because it simplifies testing URLs using
+specific TLS Client Hello messages](https://github.com/ooni/probe/issues/1731). We
+will continue to keep it up to date as long as it serves our goals.
 
 ## Usage and limitations
 
