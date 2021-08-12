@@ -46,7 +46,7 @@ https://github.com/ooni/oohttp/pull/3)). Then, we introduced
 the `http.TLSConn` abstraction that allows using different TLS
 libraries ([#4](https://github.com/ooni/oohttp/pull/4)).
 
-Every major change is documented by a pull request. We push
+Every major change is documented by a pull request. We may push
 minor changes (e.g., updating docs) directly on the `main` branch.
 
 ## Update procedure
