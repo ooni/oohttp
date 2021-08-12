@@ -6,9 +6,7 @@ package http
 
 import (
 	"bytes"
-	"internal/race"
 	"reflect"
-	"runtime"
 	"testing"
 	"time"
 )
@@ -199,25 +197,6 @@ func BenchmarkHeaderWriteSubset(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		buf.Reset()
 		testHeader.WriteSubset(&buf, nil)
-	}
-}
-
-func TestHeaderWriteSubsetAllocs(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping alloc test in short mode")
-	}
-	if race.Enabled {
-		t.Skip("skipping test under race detector")
-	}
-	if runtime.GOMAXPROCS(0) > 1 {
-		t.Skip("skipping; GOMAXPROCS>1")
-	}
-	n := testing.AllocsPerRun(100, func() {
-		buf.Reset()
-		testHeader.WriteSubset(&buf, nil)
-	})
-	if n > 0 {
-		t.Errorf("allocs = %g; want 0", n)
 	}
 }
 

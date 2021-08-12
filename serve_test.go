@@ -16,7 +16,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"internal/testenv"
 	"io"
 	"log"
 	"math/rand"
@@ -1858,42 +1857,6 @@ func TestServerUnreadRequestBodyLittle(t *testing.T) {
 	<-done
 }
 
-// Over a ~256KB (maxPostHandlerReadBytes) threshold, the server
-// should ignore client request bodies that a handler didn't read
-// and close the connection.
-func TestServerUnreadRequestBodyLarge(t *testing.T) {
-	setParallel(t)
-	if testing.Short() && testenv.Builder() == "" {
-		t.Log("skipping in short mode")
-	}
-	conn := new(testConn)
-	body := strings.Repeat("x", 1<<20)
-	conn.readBuf.Write([]byte(fmt.Sprintf(
-		"POST / HTTP/1.1\r\n"+
-			"Host: test\r\n"+
-			"Content-Length: %d\r\n"+
-			"\r\n", len(body))))
-	conn.readBuf.Write([]byte(body))
-	conn.closec = make(chan bool, 1)
-
-	ls := &oneConnListener{conn}
-	go Serve(ls, HandlerFunc(func(rw ResponseWriter, req *Request) {
-		if conn.readBuf.Len() < len(body)/2 {
-			t.Errorf("on request, read buffer length is %d; expected about 1MB", conn.readBuf.Len())
-		}
-		rw.WriteHeader(200)
-		rw.(Flusher).Flush()
-		if conn.readBuf.Len() < len(body)/2 {
-			t.Errorf("post-WriteHeader, read buffer length is %d; expected about 1MB", conn.readBuf.Len())
-		}
-	}))
-	<-conn.closec
-
-	if res := conn.writeBuf.String(); !strings.Contains(res, "Connection: close") {
-		t.Errorf("Expected a Connection: close header; got response: %s", res)
-	}
-}
-
 type handlerBodyCloseTest struct {
 	bodySize     int
 	bodyChunked  bool
@@ -1993,16 +1956,6 @@ var handlerBodyCloseTests = [...]handlerBodyCloseTest{
 		wantEOFSearch: false,
 		wantNextReq:   false,
 	},
-}
-
-func TestHandlerBodyClose(t *testing.T) {
-	setParallel(t)
-	if testing.Short() && testenv.Builder() == "" {
-		t.Skip("skipping in -short mode")
-	}
-	for i, tt := range handlerBodyCloseTests {
-		testHandlerBodyClose(t, i, tt)
-	}
 }
 
 func testHandlerBodyClose(t *testing.T, i int, tt handlerBodyCloseTest) {
@@ -5763,61 +5716,6 @@ func runTimeSensitiveTest(t *testing.T, durations []time.Duration, test func(t *
 			t.Fatalf("failed with duration %v: %v", d, err)
 		}
 	}
-}
-
-// Issue 18535: test that the Server doesn't try to do a background
-// read if it's already done one.
-func TestServerDuplicateBackgroundRead(t *testing.T) {
-	if runtime.GOOS == "netbsd" && runtime.GOARCH == "arm" {
-		testenv.SkipFlaky(t, 24826)
-	}
-
-	setParallel(t)
-	defer afterTest(t)
-
-	goroutines := 5
-	requests := 2000
-	if testing.Short() {
-		goroutines = 3
-		requests = 100
-	}
-
-	hts := httptest.NewServer(HandlerFunc(NotFound))
-	defer hts.Close()
-
-	reqBytes := []byte("GET / HTTP/1.1\r\nHost: e.com\r\n\r\n")
-
-	var wg sync.WaitGroup
-	for i := 0; i < goroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			cn, err := net.Dial("tcp", hts.Listener.Addr().String())
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			defer cn.Close()
-
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				io.Copy(io.Discard, cn)
-			}()
-
-			for j := 0; j < requests; j++ {
-				if t.Failed() {
-					return
-				}
-				_, err := cn.Write(reqBytes)
-				if err != nil {
-					t.Error(err)
-					return
-				}
-			}
-		}()
-	}
-	wg.Wait()
 }
 
 // Test that the bufio.Reader returned by Hijack includes any buffered
