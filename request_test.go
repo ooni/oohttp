@@ -14,14 +14,15 @@ import (
 	"io"
 	"math"
 	"mime/multipart"
-	. "net/http"
-	"net/http/httptest"
 	"net/url"
 	"os"
 	"reflect"
 	"regexp"
 	"strings"
 	"testing"
+
+	. "github.com/ooni/oohttp"
+	"github.com/ooni/oohttp/httptest"
 )
 
 func TestQuery(t *testing.T) {

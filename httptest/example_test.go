@@ -8,8 +8,9 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/http"
-	"net/http/httptest"
+
+	"github.com/ooni/oohttp"
+	"github.com/ooni/oohttp/httptest"
 )
 
 func ExampleResponseRecorder() {

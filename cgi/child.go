@@ -14,11 +14,12 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/ooni/oohttp"
 )
 
 // Request returns the HTTP request as represented in the current

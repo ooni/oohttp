@@ -65,7 +65,6 @@ import (
 	"internal/profile"
 	"io"
 	"log"
-	"net/http"
 	"net/url"
 	"os"
 	"runtime"
@@ -75,6 +74,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ooni/oohttp"
 )
 
 func init() {

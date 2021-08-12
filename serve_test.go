@@ -21,10 +21,6 @@ import (
 	"log"
 	"math/rand"
 	"net"
-	. "net/http"
-	"net/http/httptest"
-	"net/http/httputil"
-	"net/http/internal"
 	"net/url"
 	"os"
 	"os/exec"
@@ -40,6 +36,11 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	. "github.com/ooni/oohttp"
+	"github.com/ooni/oohttp/httptest"
+	"github.com/ooni/oohttp/httputil"
+	"github.com/ooni/oohttp/internal"
 )
 
 type dummyAddr string

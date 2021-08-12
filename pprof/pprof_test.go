@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"internal/profile"
 	"io"
-	"net/http"
-	"net/http/httptest"
 	"runtime"
 	"runtime/pprof"
 	"strings"
@@ -18,6 +16,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/ooni/oohttp"
+	"github.com/ooni/oohttp/httptest"
 )
 
 // TestDescriptions checks that the profile names under runtime/pprof package

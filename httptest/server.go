@@ -13,12 +13,13 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"net/http"
-	"net/http/internal"
 	"os"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ooni/oohttp"
+	"github.com/ooni/oohttp/internal"
 )
 
 // A Server is an HTTP server listening on a system-chosen port on the

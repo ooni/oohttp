@@ -10,8 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http/httptrace"
-	"net/http/internal"
 	"net/textproto"
 	"reflect"
 	"sort"
@@ -20,6 +18,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ooni/oohttp/httptrace"
+	"github.com/ooni/oohttp/internal"
 	"golang.org/x/net/http/httpguts"
 )
 

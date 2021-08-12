@@ -6,12 +6,13 @@ package cookiejar
 
 import (
 	"fmt"
-	"net/http"
 	"net/url"
 	"sort"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ooni/oohttp"
 )
 
 // tNow is the synthetic current time used as now during testing.

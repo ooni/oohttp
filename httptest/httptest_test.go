@@ -7,11 +7,12 @@ package httptest
 import (
 	"crypto/tls"
 	"io"
-	"net/http"
 	"net/url"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/ooni/oohttp"
 )
 
 func TestNewRequest(t *testing.T) {

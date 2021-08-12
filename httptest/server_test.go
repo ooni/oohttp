@@ -8,8 +8,9 @@ import (
 	"bufio"
 	"io"
 	"net"
-	"net/http"
 	"testing"
+
+	"github.com/ooni/oohttp"
 )
 
 type newServerFunc func(http.Handler) *Server
