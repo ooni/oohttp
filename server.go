@@ -256,7 +256,7 @@ type conn struct {
 	// rwc is the underlying network connection.
 	// This is never wrapped by other types and is the value given out
 	// to CloseNotifier callers. It is usually of type *net.TCPConn or
-	// *tls.Conn.
+	// any type that implements TLSConn.
 	rwc net.Conn
 
 	// remoteAddr is rwc.RemoteAddr().String(). It is not populated synchronously
@@ -1830,7 +1830,7 @@ func (c *conn) serve(ctx context.Context) {
 		}
 	}()
 
-	if tlsConn, ok := c.rwc.(*tls.Conn); ok {
+	if tlsConn, ok := c.rwc.(TLSConn); ok {
 		if d := c.server.ReadTimeout; d != 0 {
 			c.rwc.SetReadDeadline(time.Now().Add(d))
 		}
@@ -2519,7 +2519,7 @@ func HandleFunc(pattern string, handler func(ResponseWriter, *Request)) {
 //
 // The handler is typically nil, in which case the DefaultServeMux is used.
 //
-// HTTP/2 support is only enabled if the Listener returns *tls.Conn
+// HTTP/2 support is only enabled if the Listener returns TLSConn
 // connections and they were configured with "h2" in the TLS
 // Config.NextProtos.
 //
@@ -2611,7 +2611,7 @@ type Server struct {
 	// automatically closed when the function returns.
 	// If TLSNextProto is not nil, HTTP/2 support is not enabled
 	// automatically.
-	TLSNextProto map[string]func(*Server, *tls.Conn, Handler)
+	TLSNextProto map[string]func(*Server, TLSConn, Handler)
 
 	// ConnState specifies an optional callback function that is
 	// called when a client connection changes state. See the
@@ -2921,7 +2921,7 @@ func (srv *Server) shouldConfigureHTTP2ForServe() bool {
 		// didn't set it on the http.Server, but did pass it to
 		// tls.NewListener and passed that listener to Serve.
 		// So we should configure HTTP/2 (to set up srv.TLSNextProto)
-		// in case the listener returns an "h2" *tls.Conn.
+		// in case the listener returns an "h2" TLSConn.
 		return true
 	}
 	// The user specified a TLSConfig on their http.Server.
@@ -2942,7 +2942,7 @@ var ErrServerClosed = errors.New("http: Server closed")
 // new service goroutine for each. The service goroutines read requests and
 // then call srv.Handler to reply to them.
 //
-// HTTP/2 support is only enabled if the Listener returns *tls.Conn
+// HTTP/2 support is only enabled if the Listener returns TLSConn
 // connections and they were configured with "h2" in the TLS
 // Config.NextProtos.
 //
@@ -3435,7 +3435,7 @@ func (globalOptionsHandler) ServeHTTP(w ResponseWriter, r *Request) {
 // Requests come from ALPN protocol handlers.
 type initALPNRequest struct {
 	ctx context.Context
-	c   *tls.Conn
+	c   TLSConn
 	h   serverHandler
 }
 

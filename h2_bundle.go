@@ -827,7 +827,7 @@ func (c *http2dialCall) dial(addr string) {
 // This code decides which ones live or die.
 // The return value used is whether c was used.
 // c is never closed.
-func (p *http2clientConnPool) addConnIfNeeded(key string, t *http2Transport, c *tls.Conn) (used bool, err error) {
+func (p *http2clientConnPool) addConnIfNeeded(key string, t *http2Transport, c TLSConn) (used bool, err error) {
 	p.mu.Lock()
 	for _, cc := range p.conns[key] {
 		if cc.CanTakeNewRequest() {
@@ -863,7 +863,7 @@ type http2addConnCall struct {
 	err  error
 }
 
-func (c *http2addConnCall) run(t *http2Transport, key string, tc *tls.Conn) {
+func (c *http2addConnCall) run(t *http2Transport, key string, tc TLSConn) {
 	cc, err := t.NewClientConn(tc)
 
 	p := c.p
@@ -3843,9 +3843,9 @@ func http2ConfigureServer(s *Server, conf *http2Server) error {
 	}
 
 	if s.TLSNextProto == nil {
-		s.TLSNextProto = map[string]func(*Server, *tls.Conn, Handler){}
+		s.TLSNextProto = map[string]func(*Server, TLSConn, Handler){}
 	}
-	protoHandler := func(hs *Server, c *tls.Conn, h Handler) {
+	protoHandler := func(hs *Server, c TLSConn, h Handler) {
 		if http2testHookOnConn != nil {
 			http2testHookOnConn()
 		}
@@ -6689,7 +6689,7 @@ func http2configureTransports(t1 *Transport) (*http2Transport, error) {
 	if !http2strSliceContains(t1.TLSClientConfig.NextProtos, "http/1.1") {
 		t1.TLSClientConfig.NextProtos = append(t1.TLSClientConfig.NextProtos, "http/1.1")
 	}
-	upgradeFn := func(authority string, c *tls.Conn) RoundTripper {
+	upgradeFn := func(authority string, c TLSConn) RoundTripper {
 		addr := http2authorityAddr("https", authority)
 		if used, err := connPool.addConnIfNeeded(addr, t2, c); err != nil {
 			go c.Close()
@@ -6704,7 +6704,7 @@ func http2configureTransports(t1 *Transport) (*http2Transport, error) {
 		return t2
 	}
 	if m := t1.TLSNextProto; len(m) == 0 {
-		t1.TLSNextProto = map[string]func(string, *tls.Conn) RoundTripper{
+		t1.TLSNextProto = map[string]func(string, TLSConn) RoundTripper{
 			"h2": upgradeFn,
 		}
 	} else {
@@ -6730,7 +6730,7 @@ func (t *http2Transport) initConnPool() {
 // HTTP/2 server.
 type http2ClientConn struct {
 	t         *http2Transport
-	tconn     net.Conn             // usually *tls.Conn, except specialized impls
+	tconn     net.Conn             // needs to implemente the TLSConn interface
 	tlsState  *tls.ConnectionState // nil only for specialized impls
 	reused    uint32               // whether conn is being reused; atomic
 	singleUse bool                 // whether being used for a single http.Request
