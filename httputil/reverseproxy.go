@@ -234,6 +234,15 @@ func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	if req.ContentLength == 0 {
 		outreq.Body = nil // Issue 16036: nil Body for http.Transport retries
 	}
+	if outreq.Body != nil {
+		// Reading from the request body after returning from a handler is not
+		// allowed, and the RoundTrip goroutine that reads the Body can outlive
+		// this handler. This can lead to a crash if the handler panics (see
+		// Issue 46866). Although calling Close doesn't guarantee there isn't
+		// any Read in flight after the handle returns, in practice it's safe to
+		// read after closing it.
+		defer outreq.Body.Close()
+	}
 	if outreq.Header == nil {
 		outreq.Header = make(http.Header) // Issue 33142: historical behavior was to always allocate
 	}
@@ -248,20 +257,16 @@ func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	// important is "Connection" because we want a persistent
 	// connection, regardless of what the client sent to us.
 	for _, h := range hopHeaders {
-		hv := outreq.Header.Get(h)
-		if hv == "" {
-			continue
-		}
-		if h == "Te" && hv == "trailers" {
-			// Issue 21096: tell backend applications that
-			// care about trailer support that we support
-			// trailers. (We do, but we don't go out of
-			// our way to advertise that unless the
-			// incoming client request thought it was
-			// worth mentioning)
-			continue
-		}
 		outreq.Header.Del(h)
+	}
+
+	// Issue 21096: tell backend applications that care about trailer support
+	// that we support trailers. (We do, but we don't go out of our way to
+	// advertise that unless the incoming client request thought it was worth
+	// mentioning.) Note that we look at req.Header, not outreq.Header, since
+	// the latter has passed through removeConnectionHeaders.
+	if httpguts.HeaderValuesContainsToken(req.Header["Te"], "trailers") {
+		outreq.Header.Set("Te", "trailers")
 	}
 
 	// After stripping all the hop-by-hop connection headers above, add back any
