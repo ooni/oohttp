@@ -32,7 +32,7 @@ func (txp *StdlibTransport) RoundTrip(stdReq *http.Request) (*http.Response, err
 		Close:            resp.Close,
 		Uncompressed:     resp.Uncompressed,
 		Trailer:          http.Header(resp.Trailer),
-		Request:          stdReq, // TODO(kelmenhorst,bassosimone): is this ok?
+		Request:          stdReq,
 		TLS:              resp.TLS,
 	}
 	return stdResp, nil
