@@ -5,7 +5,7 @@ import "net/http"
 // StdlibTransport is an adapter for integrating net/http dependend code.
 // It looks like an http.RoundTripper but uses this fork internally.
 type StdlibTransport struct {
-	Transport
+	*Transport
 }
 
 // RoundTrip implements the http.RoundTripper interface.
