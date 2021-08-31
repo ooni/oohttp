@@ -8,6 +8,7 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"errors"
 	"io"
@@ -15,7 +16,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ooni/oohttp/internal"
+	"github.com/ooni/oohttp/internal/testcert"
 )
 
 // Issue 15446: incorrect wrapping of errors when server closes an idle connection.
@@ -192,7 +193,7 @@ func (f roundTripFunc) RoundTrip(r *Request) (*Response, error) {
 
 // Issue 25009
 func TestTransportBodyAltRewind(t *testing.T) {
-	cert, err := tls.X509KeyPair(internal.LocalhostCert, internal.LocalhostKey)
+	cert, err := tls.X509KeyPair(testcert.LocalhostCert, testcert.LocalhostKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +211,8 @@ func TestTransportBodyAltRewind(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			if err := sc.(TLSConn).Handshake(); err != nil {
+			ctx := context.Background()
+			if err := sc.(TLSConn).HandshakeContext(ctx); err != nil {
 				t.Error(err)
 				return
 			}

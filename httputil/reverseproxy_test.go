@@ -26,6 +26,7 @@ import (
 
 	"github.com/ooni/oohttp"
 	"github.com/ooni/oohttp/httptest"
+	"github.com/ooni/oohttp/internal/ascii"
 )
 
 const fakeHopHeader = "X-Fake-Hop-Header-For-Test"
@@ -1282,7 +1283,7 @@ func TestReverseProxyWebSocket(t *testing.T) {
 		t.Errorf("Header(XHeader) = %q; want %q", got, want)
 	}
 
-	if upgradeType(res.Header) != "websocket" {
+	if !ascii.EqualFold(upgradeType(res.Header), "websocket") {
 		t.Fatalf("not websocket upgrade; got %#v", res.Header)
 	}
 	rwc, ok := res.Body.(io.ReadWriteCloser)
@@ -1307,7 +1308,7 @@ func TestReverseProxyWebSocket(t *testing.T) {
 	}
 }
 
-func TestReverseProxyWebSocketCancelation(t *testing.T) {
+func TestReverseProxyWebSocketCancellation(t *testing.T) {
 	n := 5
 	triggerCancelCh := make(chan bool, n)
 	nthResponse := func(i int) string {
@@ -1399,7 +1400,7 @@ func TestReverseProxyWebSocketCancelation(t *testing.T) {
 		t.Errorf("X-Header mismatch\n\tgot:  %q\n\twant: %q", g, w)
 	}
 
-	if g, w := upgradeType(res.Header), "websocket"; g != w {
+	if g, w := upgradeType(res.Header), "websocket"; !ascii.EqualFold(g, w) {
 		t.Fatalf("Upgrade header mismatch\n\tgot:  %q\n\twant: %q", g, w)
 	}
 
