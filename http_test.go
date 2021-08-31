@@ -94,3 +94,19 @@ func BenchmarkCopyValues(b *testing.B) {
 		b.Fatal("Benchmark wasn't run")
 	}
 }
+
+var forbiddenStringsFunctions = map[string]bool{
+	// Functions that use Unicode-aware case folding.
+	"EqualFold":      true,
+	"Title":          true,
+	"ToLower":        true,
+	"ToLowerSpecial": true,
+	"ToTitle":        true,
+	"ToTitleSpecial": true,
+	"ToUpper":        true,
+	"ToUpperSpecial": true,
+
+	// Functions that use Unicode-aware spaces.
+	"Fields":    true,
+	"TrimSpace": true,
+}

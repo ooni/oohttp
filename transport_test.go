@@ -42,7 +42,7 @@ import (
 	"github.com/ooni/oohttp/httptest"
 	"github.com/ooni/oohttp/httptrace"
 	"github.com/ooni/oohttp/httputil"
-	"github.com/ooni/oohttp/internal"
+	"github.com/ooni/oohttp/internal/testcert"
 	"golang.org/x/net/http/httpguts"
 )
 
@@ -625,12 +625,15 @@ func TestTransportMaxConnsPerHost(t *testing.T) {
 			t.Fatalf("ExportHttp2ConfigureTransport: %v", err)
 		}
 
-		connCh := make(chan net.Conn, 1)
+		mu := sync.Mutex{}
+		var conns []net.Conn
 		var dialCnt, gotConnCnt, tlsHandshakeCnt int32
 		tr.Dial = func(network, addr string) (net.Conn, error) {
 			atomic.AddInt32(&dialCnt, 1)
 			c, err := net.Dial(network, addr)
-			connCh <- c
+			mu.Lock()
+			defer mu.Unlock()
+			conns = append(conns, c)
 			return c, err
 		}
 
@@ -684,7 +687,12 @@ func TestTransportMaxConnsPerHost(t *testing.T) {
 			t.FailNow()
 		}
 
-		(<-connCh).Close()
+		mu.Lock()
+		for _, c := range conns {
+			c.Close()
+		}
+		conns = nil
+		mu.Unlock()
 		tr.CloseIdleConnections()
 
 		doReq()
@@ -3733,7 +3741,7 @@ func TestTransportDialTLSContext(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		return c, c.Handshake()
+		return c, c.HandshakeContext(ctx)
 	}
 
 	req, err := NewRequest("GET", ts.URL, nil)
@@ -4290,7 +4298,7 @@ func TestTransportReuseConnEmptyResponseBody(t *testing.T) {
 
 // Issue 13839
 func TestNoCrashReturningTransportAltConn(t *testing.T) {
-	cert, err := tls.X509KeyPair(internal.LocalhostCert, internal.LocalhostKey)
+	cert, err := tls.X509KeyPair(testcert.LocalhostCert, testcert.LocalhostKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -4313,7 +4321,8 @@ func TestNoCrashReturningTransportAltConn(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		if err := sc.(TLSConn).Handshake(); err != nil {
+		ctx := context.Background()
+		if err := sc.(TLSConn).HandshakeContext(ctx); err != nil {
 			t.Error(err)
 			return
 		}

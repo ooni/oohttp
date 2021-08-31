@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ooni/oohttp/httptrace"
+	"github.com/ooni/oohttp/internal/ascii"
 )
 
 // A Header represents the key-value pairs in an HTTP header.
@@ -252,7 +253,7 @@ func hasToken(v, token string) bool {
 		if endPos := sp + len(token); endPos != len(v) && !isTokenBoundary(v[endPos]) {
 			continue
 		}
-		if strings.EqualFold(v[sp:sp+len(token)], token) {
+		if ascii.EqualFold(v[sp:sp+len(token)], token) {
 			return true
 		}
 	}

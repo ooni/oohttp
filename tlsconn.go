@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"crypto/tls"
 	"net"
 )
@@ -10,7 +11,14 @@ import (
 // as long as it implements the interface. You can use, for
 // example, refraction-networking/utls instead of the stdlib.
 type TLSConn interface {
+	// net.Conn is the underlying interface
 	net.Conn
+
+	// ConnectionState returns the ConnectionState according
+	// to the standard library.
 	ConnectionState() tls.ConnectionState
-	Handshake() error
+
+	// HandshakeContext performs an TLS handshake bounded
+	// in time by the given context.
+	HandshakeContext(ctx context.Context) error
 }
