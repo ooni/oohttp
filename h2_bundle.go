@@ -2951,7 +2951,7 @@ func http2traceGot1xxResponseFunc(trace *httptrace.ClientTrace) func(int, textpr
 
 // dialTLSWithContext uses tls.Dialer, added in Go 1.15, to open a TLS
 // connection.
-func (t *http2Transport) dialTLSWithContext(ctx context.Context, network, addr string, cfg *tls.Config) (*tls.Conn, error) {
+func (t *http2Transport) dialTLSWithContext(ctx context.Context, network, addr string, cfg *tls.Config) (TLSConn, error) {
 	dialer := &tls.Dialer{
 		Config: cfg,
 	}
@@ -2959,7 +2959,7 @@ func (t *http2Transport) dialTLSWithContext(ctx context.Context, network, addr s
 	if err != nil {
 		return nil, err
 	}
-	tlsCn := cn.(*tls.Conn) // DialContext comment promises this will always succeed
+	tlsCn := cn.(TLSConn) // DialContext comment promises this will always succeed
 	return tlsCn, nil
 }
 
