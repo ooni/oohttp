@@ -13,8 +13,6 @@ will continue to keep it up to date as long as it serves our goals.
 
 ## Limitations
 
-Please, keep in mind the following limitations:
-
 1. This fork does not include a fork of `pprof` because such package
 depends on the stdlib's `internal/profile` package. If your code uses
 `http/pprof`, then you cannot switch to this fork.
