@@ -53,10 +53,10 @@ import "net/http"
 with
 
 ```Go
-import http "github.com/ooni/oohttp"
+import "github.com/ooni/oohttp"
 ```
 
-and use `oohttp` as `http` consistently in the whole codebase.
+everywhere in your codebase.
 
 This approach is not practical when your code or your dependency
 already assumes `net/http`. In such a case, use
