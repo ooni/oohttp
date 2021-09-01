@@ -183,19 +183,32 @@ minor changes (e.g., updating docs) directly on the `main` branch.
 
 (Adapted from refraction-networking/utls instructions.)
 
-1. run the following commands:
+- [ ] run the following commands:
 
 ```
+git checkout main
 git remote add golang git@github.com:golang/go.git || git fetch golang
-git branch -D golang-upstream golang-http-upstream
-git checkout -b golang-upstream go1.16.7
+git branch -D golang-upstream golang-http-upstream merged-main
+git checkout -b golang-upstream go1.17
 git subtree split -P src/net/http/ -b golang-http-upstream
-git checkout merged-main
+git checkout main
+git checkout -b merged-main
 git merge golang-http-upstream
-git push merged-main
 ```
 
-2. make sure the codebase does not assume `*net.Conn` anywhere (every
-merge may introduce new changes);
+- [ ] solve the very-likely merge conflicts and ensure [the original spirit of the
+patches](#patches) still hold in the merged codebase;
 
-3. open a pull request on github and merge it with merge commit.
+- [ ] make sure the codebase does not assume `*net.Conn` *anywhere* (every
+merge may introduce new changes, so we must recheck each time);
+
+- [ ] ensure `go build -v ./...` still works;
+
+- [ ] ensure `go test -race ./...` is still passing;
+
+- [ ] commit the changes and push `merged-main` to gitub;
+
+- [ ] go to [example](example), update *each submodule* and make sure
+they continue to work as intended by running tests;
+
+- [ ] open a PR and merge it *using a merge commit*.
