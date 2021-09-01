@@ -8,8 +8,13 @@ import (
 	"net/http"
 )
 
+// newClient creates a new http.Client using the given transport.
+func newClient(txp http.RoundTripper) *http.Client {
+	return &http.Client{Transport: txp}
+}
+
 // defaultClient is the default http.Client
-var defaultClient = &http.Client{Transport: defaultTransport}
+var defaultClient = newClient(defaultTransport)
 
 func main() {
 	url := flag.String("url", "", "The URL to retrieve")
