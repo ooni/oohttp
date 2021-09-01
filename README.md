@@ -208,7 +208,7 @@ merge may introduce new changes!);
 
 - [ ] commit the changes and push `merged-main` to gitub;
 
-- [ ] go to [example](example), update *each submodule* and make sure
-they continue to work as intended by running tests;
+- [ ] go to [example](example), update *each submodule* and ensure
+`go test -race ./...` passes in each submodule;
 
 - [ ] open a PR and merge it *using a merge commit*.
