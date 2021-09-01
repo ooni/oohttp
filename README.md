@@ -200,7 +200,7 @@ git merge golang-http-upstream
 patches](#patches) still hold in the merged codebase;
 
 - [ ] make sure the codebase does not assume `*net.Conn` *anywhere* (every
-merge may introduce new changes, so we must recheck each time);
+merge may introduce new changes!);
 
 - [ ] ensure `go build -v ./...` still works;
 
