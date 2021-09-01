@@ -31,6 +31,8 @@ var defaultTransport = &oohttp.StdlibTransport{
 				return nil, err
 			}
 			uconfig := &utls.Config{ServerName: sni}
+			// Implementation note: using Firefox 55 ClientHello because that
+			// avoids a bunch of issues, e.g., Brotli encrypted x509 certs.
 			uconn := utls.UClient(conn, uconfig, utls.HelloFirefox_55)
 			uadapter := &utlsConnAdapter{uconn}
 			if err := uadapter.HandshakeContext(ctx); err != nil {

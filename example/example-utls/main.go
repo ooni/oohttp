@@ -8,11 +8,13 @@ import (
 	"net/http"
 )
 
+// defaultClient is the default http.Client
+var defaultClient = &http.Client{Transport: defaultTransport}
+
 func main() {
 	url := flag.String("url", "", "The URL to retrieve")
 	flag.Parse()
-	clnt := &http.Client{Transport: defaultTransport}
-	resp, err := clnt.Get(*url)
+	resp, err := defaultClient.Get(*url)
 	if err != nil {
 		log.Fatal(err)
 	}
