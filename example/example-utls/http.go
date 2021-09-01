@@ -37,8 +37,8 @@ var defaultTransport = &oohttp.StdlibTransport{
 				conn.Close()
 				return nil, err
 			}
-			nepro := uadapter.ConnectionState().NegotiatedProtocol
-			log.Printf("negotiated protocol: %s", nepro)
+			proto := uadapter.ConnectionState().NegotiatedProtocol
+			log.Printf("negotiated protocol: %s", proto)
 			return uadapter, nil
 		},
 		ForceAttemptHTTP2:     true,
