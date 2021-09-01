@@ -131,16 +131,12 @@ func (c *uconn) ConnectionState() tls.ConnectionState {
 	return tls.ConnectionState{
 		Version:                     ustate.Version,
 		HandshakeComplete:           ustate.HandshakeComplete,
-		DidResume:                   ustate.DidResume,
-		CipherSuite:                 ustate.CipherSuite,
-		NegotiatedProtocol:          ustate.NegotiatedProtocol,
-		NegotiatedProtocolIsMutual:  ustate.NegotiatedProtocolIsMutual,
-		ServerName:                  ustate.ServerName,
-		PeerCertificates:            ustate.PeerCertificates,
-		VerifiedChains:              ustate.VerifiedChains,
-		SignedCertificateTimestamps: ustate.SignedCertificateTimestamps,
-		OCSPResponse:                ustate.OCSPResponse,
-		TLSUnique:                   ustate.TLSUnique,
+		//
+		// [...]
+		//
+		// You get the idea. You need to copy all fields. We
+		// intentionally snip early here so we are not forced
+		// to ensure this code is always up-to-date.
 	}
 }
 
@@ -204,6 +200,12 @@ patches](#patches) still hold;
 - [ ] ensure `go build -v ./...` still works;
 
 - [ ] ensure `go test -race ./...` is still passing;
+
+- [ ] ensure [stdlibwrapper.go](stdlibwrapper.go) copies all
+the `Response` fields;
+
+- [ ] ensure [example/example-utls/tls.go](example/example-utls/tls.go)
+copies all the `ConnectionState` fields;
 
 - [ ] commit the changes and push `merged-main` to gitub;
 
