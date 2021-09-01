@@ -58,7 +58,7 @@ import "github.com/ooni/oohttp"
 
 everywhere in your codebase.
 
-This approach is not practical when your code or your dependency
+This approach is not practical when your code or a dependency of yours
 already assumes `net/http`. In such a case, use
 [stdlibwrapper.go](stdlibwrapper.go).
 This code provides you with an adapter implementing `net/http.Transport`. It
