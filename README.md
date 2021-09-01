@@ -60,19 +60,30 @@ and use `oohttp` as `http` consistently in the whole codebase.
 
 This approach is not practical when your code or your dependency
 already assumes `net/http`. In such a case, use
-[stdlibwrapper.go](https://github.com/ooni/oohttp/blob/main/stdlibwrapper.go).
+[stdlibwrapper.go](stdlibwrapper.go).
 This code provides you with an adapter implementing `net/http.Transport`. It
 tales the stdlib's `net/http.Request` as input and returns the stdlib's
 `net/http.Response` as output. But, internally, it uses the `Transport` defined
 by this library, that is capable to interface with any TLS library
-implementing the [TLSConn](https://github.com/ooni/oohttp/blob/main/tlsconn.go)
-interface.
+implementing the [TLSConn](tlsconn.go) interface:
+
+```Go
+// StdlibTransport is an adapter for integrating net/http dependend code.
+// It looks like an http.RoundTripper but uses this fork internally.
+type StdlibTransport struct {
+	*Transport
+}
+
+// RoundTrip implements the http.RoundTripper interface.
+func (txp *StdlibTransport) RoundTrip(stdReq *http.Request) (*http.Response, error) {
+	// ...
+}
+```
 
 ### Interface between this library and any TLS library
 
 You need to write a wrapper for your definition of the TLS connection that
-implements the [TLSConn](https://github.com/ooni/oohttp/blob/main/tlsconn.go)
-interface:
+implements the [TLSConn](tlsconn.go) interface:
 
 ```Go
 // TLSConn is the interface representing a *tls.Conn compatible
