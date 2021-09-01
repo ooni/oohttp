@@ -64,8 +64,7 @@ already assumes `net/http`. In such a case, use
 which provides you with an adapter implementing `net/http.Transport`. It
 takes the stdlib's `net/http.Request` as input and returns the stdlib's
 `net/http.Response` as output. But, internally, it uses the `Transport` defined
-by this library, that is capable to interface with any TLS library
-implementing the [TLSConn](tlsconn.go) interface:
+by this library:
 
 ```Go
 // StdlibTransport is an adapter for integrating net/http dependend code.
