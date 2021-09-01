@@ -107,7 +107,8 @@ type TLSConn interface {
 ```
 
 If you are using `crypto/tls`, then
-your `tls.Conn` is already a valid `TLSConn`. (However, if you are using
+your `tls.Conn` is already a valid `TLSConn` and you don't need to do
+anything in particular. (However, if you are using
 `crypto/tls`, you should probably be using `net/http` as well.)
 
 If you are using `refraction-networking/utls`, you need to write an
