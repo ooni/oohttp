@@ -106,8 +106,9 @@ type TLSConn interface {
 }
 ```
 
-If you are using `crypto/tls` (which does not make much sense), then
-your `tls.Conn` is already a valid `TLSConn`.
+If you are using `crypto/tls`, then
+your `tls.Conn` is already a valid `TLSConn`. (However, if you are using
+`crypto/tls`, you should probably be using `net/http` as well.)
 
 If you are using `refraction-networking/utls`, you need to write an
 adapter. Your TLS connection is
