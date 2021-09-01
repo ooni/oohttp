@@ -33,11 +33,20 @@ get build errors because `io.ReadAll` did not exist before Go 1.16.
 
 ## Usage
 
-To use this fork, you have two options, described below.
+The follow diagram shows your typical app architecture when you're
+using this library as an alternative HTTP library.
 
-### Fully replacing net/http
+![architecture](oohttp.png)
 
-You can simply replace
+From the diagram, it stems that we need to discuss two interfaces:
+
+1. the interface between your code and this library;
+
+2. the interface between this library and a TLS library.
+
+### Interface between your code and this library
+
+The simplest approach is to just replace
 
 ```Go
 import "net/http"
@@ -46,14 +55,93 @@ import "net/http"
 with
 
 ```Go
-import "github.com/ooni/oohttp"
+import http "github.com/ooni/oohttp"
 ```
 
-The code will work out of the box (except for the [above-mentioned
-limitations](#limitations).
+and do that for all your codebase.
 
-### Using
+This approach is not practical when your code or your dependency
+already assumes `net/http`. In such a case, use
+[stdlibwrapper.go](https://github.com/ooni/oohttp/blob/main/stdlibwrapper.go).
+This code provides you with an adapter implementing `net/http.Transport`. It
+tales the stdlib's `net/http.Request` as input and returns the stdlib's
+`net/http.Response` as output. But, internally, it uses the `Transport` defined
+by this library, that is capable to interface with any TLS library
+implementing the [TLSConn](https://github.com/ooni/oohttp/blob/main/tlsconn.go)
+interface.
 
+### Interface between this library and any TLS library
+
+You need to write a wrapper for your definition of the TLS connection that
+implements the [TLSConn](https://github.com/ooni/oohttp/blob/main/tlsconn.go)
+interface:
+
+```Go
+// TLSConn is the interface representing a *tls.Conn compatible
+// connection, which could possibly be different from a *tls.Conn
+// as long as it implements the interface. You can use, for
+// example, refraction-networking/utls instead of the stdlib.
+type TLSConn interface {
+	// net.Conn is the underlying interface
+	net.Conn
+
+	// ConnectionState returns the ConnectionState according
+	// to the standard library.
+	ConnectionState() tls.ConnectionState
+
+	// HandshakeContext performs an TLS handshake bounded
+	// in time by the given context.
+	HandshakeContext(ctx context.Context) error
+}
+```
+
+If you are using `refraction-networking/utls`, your TLS connection is
+already a `net.Conn`. You need to implement `ConnectionState` by
+copying the fields from the `utls` `ConnectionState`. You also need
+to implement `HandshakeContext`.
+
+The following code shows, for reference, how we initially implemented
+this functionality in [ooni/probe-cli](https://github.com/ooni/probe-cli):
+
+```Go
+// uconn is an adapter from utls.UConn to TLSConn.
+type uconn struct {
+	*utls.UConn
+}
+
+// ConnectionState implements TLSConn's ConnectionState.
+func (c *uconn) ConnectionState() tls.ConnectionState {
+	ustate := c.UConn.ConnectionState()
+	return tls.ConnectionState{
+		Version:                     ustate.Version,
+		HandshakeComplete:           ustate.HandshakeComplete,
+		DidResume:                   ustate.DidResume,
+		CipherSuite:                 ustate.CipherSuite,
+		NegotiatedProtocol:          ustate.NegotiatedProtocol,
+		NegotiatedProtocolIsMutual:  ustate.NegotiatedProtocolIsMutual,
+		ServerName:                  ustate.ServerName,
+		PeerCertificates:            ustate.PeerCertificates,
+		VerifiedChains:              ustate.VerifiedChains,
+		SignedCertificateTimestamps: ustate.SignedCertificateTimestamps,
+		OCSPResponse:                ustate.OCSPResponse,
+		TLSUnique:                   ustate.TLSUnique,
+	}
+}
+
+// HandshakeContext implements TLSConn's HandshakeContext.
+func (c *uconn) HandshakeContext(ctx context.Context) error {
+	errch := make(chan error, 1)
+  go func() {
+    errch <- c.UConn.Handshake()
+  }()
+  select {
+  case err := <-errch:
+    return err
+  case <-ctx.Done():
+    return ctx.Err()
+  }
+}
+```
 
 ## Issue tracker
 
