@@ -111,7 +111,7 @@ your `tls.Conn` is already a valid `TLSConn` and you don't need to do
 anything in particular. (However, if you are using
 `crypto/tls`, you should probably be using `net/http` as well.)
 
-If you are using `refraction-networking/utls`, you need to write an
+If you are using `refraction-networking/utls` (or `Yawning/utls`), you need to write an
 adapter. Your TLS connection is
 already a `net.Conn`. But you need to implement `ConnectionState`. And
 you also need to implement `HandshakeContext`.
