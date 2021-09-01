@@ -107,9 +107,13 @@ type TLSConn interface {
 }
 ```
 
-If you are using `refraction-networking/utls`, your TLS connection is
-already a `net.Conn`. You need to implement `ConnectionState` by
-copying the fields from the `utls` `ConnectionState`. You also need
+If you are using `crypto/tls` (which does not make much sense), then
+your `tls.Conn` is already a valid `TLSConn`.
+
+If you are using `refraction-networking/utls`, you need to write an
+adapter. Your TLS connection is
+already a `net.Conn`. But you need to implement `ConnectionState` by
+copying the fields from the `utls` `ConnectionState`. And you also need
 to implement `HandshakeContext`.
 
 The following code shows, for reference, how we initially implemented
