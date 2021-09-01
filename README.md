@@ -56,7 +56,7 @@ with
 import http "github.com/ooni/oohttp"
 ```
 
-and do that for all your codebase.
+and use `oohttp` as `http` consistently in the whole codebase.
 
 This approach is not practical when your code or your dependency
 already assumes `net/http`. In such a case, use
