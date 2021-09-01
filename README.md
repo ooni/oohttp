@@ -81,8 +81,7 @@ func (txp *StdlibTransport) RoundTrip(stdReq *http.Request) (*http.Response, err
 ```
 
 See [example/example-utls/http.go](example/example-utls/http.go) for a real
-world example where we use `StdlibTransport` and to export a `net/http`
-compatible `http.RoundTripper`.
+world example where we use `StdlibTransport` to be `net/http` compatible.
 
 ### Interface between this library and any TLS library
 
@@ -157,7 +156,7 @@ func (c *uconn) HandshakeContext(ctx context.Context) error {
 ```
 
 See [example/example-utls/tls.go](example/example-utls/tls.go) for a real-world
-example of how to write and use a `TLSConn` compatible adapter.
+example of writing a `TLSConn` compatible adapter.
 
 ## Issue tracker
 
