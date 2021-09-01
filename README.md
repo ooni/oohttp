@@ -11,19 +11,7 @@ We created this package [because it simplifies testing URLs using
 specific TLS Client Hello messages](https://github.com/ooni/probe/issues/1731). We
 will continue to keep it up to date as long as it serves our goals.
 
-## Usage and limitations
-
-To use this fork, replace
-
-```Go
-import "net/http"
-```
-
-with
-
-```Go
-import "github.com/ooni/oohttp"
-```
+## Limitations
 
 Please, keep in mind the following limitations:
 
@@ -42,6 +30,30 @@ not be working with earlier versions of Go. For example, when
 writing this note we are at Go 1.16 and this package accordingly
 uses `io.ReadAll`. If you are compiling using Go 1.15, you should
 get build errors because `io.ReadAll` did not exist before Go 1.16.
+
+## Usage
+
+To use this fork, you have two options, described below.
+
+### Fully replacing net/http
+
+You can simply replace
+
+```Go
+import "net/http"
+```
+
+with
+
+```Go
+import "github.com/ooni/oohttp"
+```
+
+The code will work out of the box (except for the [above-mentioned
+limitations](#limitations).
+
+### Using
+
 
 ## Issue tracker
 
