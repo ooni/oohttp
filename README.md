@@ -140,15 +140,15 @@ func (c *uconn) ConnectionState() tls.ConnectionState {
 // HandshakeContext implements TLSConn's HandshakeContext.
 func (c *uconn) HandshakeContext(ctx context.Context) error {
 	errch := make(chan error, 1)
-  go func() {
-    errch <- c.UConn.Handshake()
-  }()
-  select {
-  case err := <-errch:
-    return err
-  case <-ctx.Done():
-    return ctx.Err()
-  }
+	go func() {
+		errch <- c.UConn.Handshake()
+	}()
+	select {
+	case err := <-errch:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 ```
 
