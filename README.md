@@ -112,9 +112,8 @@ your `tls.Conn` is already a valid `TLSConn`.
 
 If you are using `refraction-networking/utls`, you need to write an
 adapter. Your TLS connection is
-already a `net.Conn`. But you need to implement `ConnectionState` by
-copying the fields from the `utls` `ConnectionState`. And you also need
-to implement `HandshakeContext`.
+already a `net.Conn`. But you need to implement `ConnectionState`. And
+you also need to implement `HandshakeContext`.
 
 The following code shows, for reference, how we initially implemented
 this functionality in [ooni/probe-cli](https://github.com/ooni/probe-cli):
