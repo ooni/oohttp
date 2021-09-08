@@ -2,7 +2,7 @@ module github.com/ooni/oohttp/example/example-utls
 
 go 1.17
 
-require github.com/ooni/oohttp v0.0.0-20210831135444-3590f53e6931
+require github.com/ooni/oohttp v0.0.0-20210908225420-f69a9d0ae546
 
 require (
 	github.com/refraction-networking/utls v0.0.0-20210713165636-0b2885c8c0d4
