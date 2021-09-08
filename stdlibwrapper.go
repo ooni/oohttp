@@ -10,7 +10,8 @@ type StdlibTransport struct {
 
 // RoundTrip implements the http.RoundTripper interface.
 func (txp *StdlibTransport) RoundTrip(stdReq *http.Request) (*http.Response, error) {
-	req, err := NewRequest(stdReq.Method, stdReq.URL.String(), stdReq.Body)
+	req, err := NewRequestWithContext(
+		stdReq.Context(), stdReq.Method, stdReq.URL.String(), stdReq.Body)
 	if err != nil {
 		return nil, err
 	}
