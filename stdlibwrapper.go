@@ -32,7 +32,7 @@ func (txp *StdlibTransport) RoundTrip(stdReq *http.Request) (*http.Response, err
 		TLS:              stdReq.TLS,
 		Cancel:           stdReq.Cancel,
 		Response:         nil, // cannot assign this field
-		ctx:              nil, // cannot assign this field
+		ctx:              stdReq.Context(),
 	}
 	resp, err := txp.Transport.RoundTrip(req)
 	if err != nil {
