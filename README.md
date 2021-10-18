@@ -29,6 +29,11 @@ writing this note we are at Go 1.16 and this package accordingly
 uses `io.ReadAll`. If you are compiling using Go 1.15, you should
 get build errors because `io.ReadAll` did not exist before Go 1.16.
 
+4. If you set `Transport.Proxy`, this library will _always_ use
+`crypto/tls` rather than `Transport.DialTLS{,Context}`. This happens
+because, under the hood, when you set `Transport.Proxy` the code
+calls `crypto/tls.Client` to create a new TLS conn.
+
 ## Usage
 
 The follow diagram shows your typical app architecture when you're
