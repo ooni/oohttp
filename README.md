@@ -195,7 +195,7 @@ git merge golang-http-upstream
 - [ ] solve the very-likely merge conflicts and ensure [the original spirit of the
 patches](#patches) still hold;
 
-- [ ] make sure the codebase does not assume `*net.Conn` *anywhere*;
+- [ ] make sure the codebase does not assume `*tls.Conn` *anywhere*;
 
 - [ ] ensure `go build -v ./...` still works;
 
