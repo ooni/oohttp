@@ -186,11 +186,12 @@ minor changes (e.g., updating docs) directly on the `main` branch.
 
 - [ ] run the following commands:
 
-```
+```bash
+set -ex
 git checkout main
 git remote add golang git@github.com:golang/go.git || git fetch golang
-git branch -D golang-upstream golang-http-upstream merged-main
-git checkout -b golang-upstream go1.17
+git branch -D golang-upstream golang-http-upstream merged-main || true
+git checkout -b golang-upstream go1.17.2
 git subtree split -P src/net/http/ -b golang-http-upstream
 git checkout main
 git checkout -b merged-main
@@ -207,7 +208,7 @@ patches](#patches) still hold;
 - [ ] ensure `go test -race ./...` is still passing;
 
 - [ ] ensure [stdlibwrapper.go](stdlibwrapper.go) copies all
-the `Response` fields;
+the `Request` and `Response` fields;
 
 - [ ] ensure [example/example-utls/tls.go](example/example-utls/tls.go)
 copies all the `ConnectionState` fields;
