@@ -191,7 +191,8 @@ set -ex
 git checkout main
 git remote add golang git@github.com:golang/go.git || git fetch golang
 git branch -D golang-upstream golang-http-upstream merged-main || true
-git checkout -b golang-upstream go1.17.2
+git fetch golang
+git checkout -b golang-upstream go1.17.3
 git subtree split -P src/net/http/ -b golang-http-upstream
 git checkout main
 git checkout -b merged-main
@@ -201,7 +202,7 @@ git merge golang-http-upstream
 - [ ] solve the very-likely merge conflicts and ensure [the original spirit of the
 patches](#patches) still hold;
 
-- [ ] make sure the codebase does not assume `*tls.Conn` *anywhere*;
+- [ ] make sure the codebase does not assume `*tls.Conn` *anywhere* (`git grep '\*tls\.Conn'`);
 
 - [ ] ensure `go build -v ./...` still works;
 
@@ -210,10 +211,14 @@ patches](#patches) still hold;
 - [ ] ensure [stdlibwrapper.go](stdlibwrapper.go) copies all
 the `Request` and `Response` fields;
 
+- [ ] commit the changes and push `merged-main` to gitub;
+
+- [ ] open a PR and merge it *using a merge commit*;
+
+- [ ] create a new working branch to update the examples;
+
 - [ ] ensure [example/example-utls/tls.go](example/example-utls/tls.go)
 copies all the `ConnectionState` fields;
-
-- [ ] commit the changes and push `merged-main` to gitub;
 
 - [ ] go to [example](example), update *each submodule* and ensure
 `go test -race ./...` passes in each submodule;
