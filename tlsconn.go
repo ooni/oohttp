@@ -22,3 +22,9 @@ type TLSConn interface {
 	// in time by the given context.
 	HandshakeContext(ctx context.Context) error
 }
+
+// TLSClientFactory is the factory used when creating connections
+// using a proxy inside of the HTTP library. By default, this is
+// the tls.Client function. You'll need to override this factory if
+// you want to use refraction-networking/utls for proxied conns.
+var TLSClientFactory = tls.Client
