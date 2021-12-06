@@ -1519,7 +1519,7 @@ func (pconn *persistConn) addTLS(ctx context.Context, name string, trace *httptr
 		cfg.NextProtos = nil
 	}
 	plainConn := pconn.conn
-	tlsConn := tls.Client(plainConn, cfg)
+	tlsConn := TLSClientFactory(plainConn, cfg)
 	errc := make(chan error, 2)
 	var timer *time.Timer // for canceling TLS handshake
 	if d := pconn.t.TLSHandshakeTimeout; d != 0 {
