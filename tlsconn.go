@@ -24,7 +24,9 @@ type TLSConn interface {
 }
 
 // TLSClientFactory is the factory used when creating connections
-// using a proxy inside of the HTTP library. By default, this is
-// the tls.Client function. You'll need to override this factory if
+// using a proxy inside of the HTTP library. By default, this will
+// call the tls.Client func. You'll need to override this factory if
 // you want to use refraction-networking/utls for proxied conns.
-var TLSClientFactory = tls.Client
+var TLSClientFactory = func(conn net.Conn, config *tls.Config) TLSConn {
+	return tls.Client(conn, config)
+}
