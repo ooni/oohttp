@@ -7,20 +7,26 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"net"
 	"time"
 
 	"github.com/armon/go-socks5"
 	oohttp "github.com/ooni/oohttp"
 )
 
-// startProxyServer starts a proxy server at the given endpoint.
-func startProxyServer(endpoint string) {
+// startProxyServer starts a SOCKS5 proxy server at the given endpoint.
+func startProxyServer(endpoint string, ch chan<- interface{}) {
 	conf := &socks5.Config{}
 	server, err := socks5.New(conf)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := server.ListenAndServe("tcp", endpoint); err != nil {
+	listener, err := net.Listen("tcp", endpoint)
+	if err != nil {
+		log.Fatal(err)
+	}
+	close(ch) // signal the main goroutine it can now continue
+	if err := server.Serve(listener); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -65,6 +71,8 @@ func main() {
 	if *utls {
 		useUTLS()
 	}
-	go startProxyServer(*proxy)
+	ch := make(chan interface {})
+	go startProxyServer(*proxy, ch)
+	<-ch // wait for the listener to be listening
 	useProxy(*url, *proxy)
 }
