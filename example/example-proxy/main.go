@@ -61,7 +61,7 @@ func useProxy(URL, proxy string) {
 }
 
 func main() {
-	proxy := flag.String("proxy", "127.0.0.1:54321", "where the proxy shold listen")
+	proxy := flag.String("proxy", "127.0.0.1:54321", "where the proxy should listen")
 	// The default URL we use should return us the JA3 fingerprint
 	// we're using to communicate with the server. We expect such a
 	// fingerprint to change when we use the `-utls` flag.
