@@ -1,13 +1,14 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
-	"net"
 	"time"
 
 	"github.com/armon/go-socks5"
@@ -33,7 +34,8 @@ func startProxyServer(endpoint string, ch chan<- interface{}) {
 
 // useProxy uses the oohttp library to possibly use refraction-networking/utls
 // when communicating with a remote TLS endpoint through the given proxy.
-func useProxy(URL, proxy string) {
+func useProxy(URL, proxy string,
+	tlsClientFactory func(conn net.Conn, config *tls.Config) oohttp.TLSConn) {
 	w := &oohttp.StdlibTransport{
 		Transport: &oohttp.Transport{
 			Proxy: func(*oohttp.Request) (*url.URL, error) {
@@ -44,6 +46,7 @@ func useProxy(URL, proxy string) {
 			IdleConnTimeout:       90 * time.Second,
 			TLSHandshakeTimeout:   10 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
+			TLSClientFactory:      tlsClientFactory,
 		},
 	}
 	clnt := &http.Client{Transport: w}
@@ -68,11 +71,12 @@ func main() {
 	url := flag.String("url", "https://ja3er.com/json", "the URL to get")
 	utls := flag.Bool("utls", false, "try using uTLS")
 	flag.Parse()
+	var ffun func(conn net.Conn, config *tls.Config) oohttp.TLSConn
 	if *utls {
-		useUTLS()
+		ffun = utlsFactory
 	}
-	ch := make(chan interface {})
+	ch := make(chan interface{})
 	go startProxyServer(*proxy, ch)
 	<-ch // wait for the listener to be listening
-	useProxy(*url, *proxy)
+	useProxy(*url, *proxy, ffun)
 }

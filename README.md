@@ -29,11 +29,6 @@ writing this note we are at Go 1.16 and this package accordingly
 uses `io.ReadAll`. If you are compiling using Go 1.15, you should
 get build errors because `io.ReadAll` did not exist before Go 1.16.
 
-4. If you set `Transport.Proxy`, this library will _always_ use
-`crypto/tls` rather than `Transport.DialTLS{,Context}`. This happens
-because, under the hood, when you set `Transport.Proxy` the code
-calls `crypto/tls.Client` to create a new TLS conn.
-
 ## Usage
 
 The follow diagram shows your typical app architecture when you're
@@ -114,7 +109,7 @@ type TLSConn interface {
 If you are using `crypto/tls`, then
 your `tls.Conn` is already a valid `TLSConn` and you don't need to do
 anything in particular. (However, if you are using
-`crypto/tls`, you should probably be using `net/http` as well.)
+`crypto/tls`, you shouldn't probably be using `oohttp` at all!)
 
 If you are using `refraction-networking/utls` (or `Yawning/utls`), you need to write an
 adapter. Your TLS connection is
@@ -163,6 +158,41 @@ func (c *uconn) HandshakeContext(ctx context.Context) error {
 See [example/example-utls/tls.go](example/example-utls/tls.go) for a real-world
 example of writing a `TLSConn` compatible adapter.
 
+Once you have the adapter in place, you should write a factory for creating
+the specific uTLS connection you'd like to use; for example:
+
+```Go
+// utlsFactory creates a new uTLS connection.
+func utlsFactory(conn net.Conn, config *tls.Config) oohttp.TLSConn {
+	uConfig := &utls.Config{
+		RootCAs:                     config.RootCAs,
+		NextProtos:                  config.NextProtos,
+		ServerName:                  config.ServerName,
+		InsecureSkipVerify:          config.InsecureSkipVerify,
+		DynamicRecordSizingDisabled: config.DynamicRecordSizingDisabled,
+	}
+	return &uconn{utls.UClient(conn, uConfig, utls.HelloFirefox_55)}
+}
+```
+
+Finally, you should configure `utlsFactory` as being your `TLSClientFactory`
+by setting the corresponding field of the `oohttp.Transport`:
+
+```Go
+txp := &oohttp.Transport{
+	// ...
+	TLSClientFactory: utlsFactory,
+}
+```
+
+This `TLSClientFactory` will also work when using a proxy.
+
+See [example/example-utls](example/example-utls) for a complete example
+that does not use a proxy. Likewise, see [example/example-proxy](example/example-proxy)
+for an example that uses a proxy. A more complex example, where we
+override `Transport.DialTLSContext` is
+[example/example-utls-with-dial](example/example-utls-with-dial).
+
 ## Issue tracker
 
 Please, report issues in the [ooni/probe](https://github.com/ooni/probe)
@@ -175,7 +205,12 @@ applied patches to fork the codebase ([#1](https://github.com/ooni/oohttp/pull/1
 [#2](https://github.com/ooni/oohttp/pull/2) and [#3](
 https://github.com/ooni/oohttp/pull/3)). Then, we introduced
 the `http.TLSConn` abstraction that allows using different TLS
-libraries ([#4](https://github.com/ooni/oohttp/pull/4)).
+libraries ([#4](https://github.com/ooni/oohttp/pull/4)). We
+added the `StdlibTransport` wrapped in [#8](https://github.com/ooni/oohttp/pull/8).
+and [#9](https://github.com/ooni/oohttp/pull/9). We added support
+for `TLSClientFactory` in [#16](https://github.com/ooni/oohttp/pull/16),
+[#19](https://github.com/ooni/oohttp/pull/19), and
+[#22](https://github.com/ooni/oohttp/pull/22).
 
 Every major change is documented by a pull request. We may push
 minor changes (e.g., updating docs) directly on the `main` branch.
@@ -203,6 +238,8 @@ git merge golang-http-upstream
 patches](#patches) still hold;
 
 - [ ] make sure the codebase does not assume `*tls.Conn` *anywhere* (`git grep '\*tls\.Conn'`);
+
+- [ ] make sure the codebase does not call `tls.Client` *anywhere* (`git grep '\*tls\.Client'`);
 
 - [ ] ensure `go build -v ./...` still works;
 

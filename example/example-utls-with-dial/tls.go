@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"net"
 
 	oohttp "github.com/ooni/oohttp"
 	utls "github.com/refraction-networking/utls"
@@ -47,16 +46,4 @@ func (c *utlsConnAdapter) HandshakeContext(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-}
-
-// utlsFactory creates a new uTLS connection.
-func utlsFactory(conn net.Conn, config *tls.Config) oohttp.TLSConn {
-	uConfig := &utls.Config{
-		RootCAs:                     config.RootCAs,
-		NextProtos:                  config.NextProtos,
-		ServerName:                  config.ServerName,
-		InsecureSkipVerify:          config.InsecureSkipVerify,
-		DynamicRecordSizingDisabled: config.DynamicRecordSizingDisabled,
-	}
-	return &utlsConnAdapter{utls.UClient(conn, uConfig, utls.HelloFirefox_55)}
 }
