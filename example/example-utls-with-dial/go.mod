@@ -1,4 +1,4 @@
-module github.com/ooni/oohttp/example/example-utls
+module github.com/ooni/oohttp/example/example-utls-with-dial
 
 go 1.17
 
