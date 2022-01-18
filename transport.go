@@ -281,6 +281,13 @@ type Transport struct {
 	// To use a custom dialer or TLS config and still attempt HTTP/2
 	// upgrades, set this to true.
 	ForceAttemptHTTP2 bool
+
+	// TLSClientFactory is an ooni/oohttp extension. If this field is not
+	// nil, we'll use it. Otherwise we'll default to using the
+	// oohttp.TLSClientFactory global factory. (But, if you set the
+	// DialTLSContext function, you'll completely bypass this
+	// per-Transport-or-global TLSClientFactory mechanism.)
+	TLSClientFactory func(conn net.Conn, config *tls.Config) TLSConn
 }
 
 // A cancelKey is the key of the reqCanceler map.
@@ -328,6 +335,7 @@ func (t *Transport) Clone() *Transport {
 		ForceAttemptHTTP2:      t.ForceAttemptHTTP2,
 		WriteBufferSize:        t.WriteBufferSize,
 		ReadBufferSize:         t.ReadBufferSize,
+		TLSClientFactory:       t.TLSClientFactory,
 	}
 	if t.TLSClientConfig != nil {
 		t2.TLSClientConfig = t.TLSClientConfig.Clone()
@@ -1519,7 +1527,7 @@ func (pconn *persistConn) addTLS(ctx context.Context, name string, trace *httptr
 		cfg.NextProtos = nil
 	}
 	plainConn := pconn.conn
-	tlsConn := TLSClientFactory(plainConn, cfg)
+	tlsConn := pconn.t.tlsClientFactory(plainConn, cfg) // oohttp ext to allow utls
 	errc := make(chan error, 2)
 	var timer *time.Timer // for canceling TLS handshake
 	if d := pconn.t.TLSHandshakeTimeout; d != 0 {

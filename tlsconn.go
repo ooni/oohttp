@@ -30,3 +30,12 @@ type TLSConn interface {
 var TLSClientFactory = func(conn net.Conn, config *tls.Config) TLSConn {
 	return tls.Client(conn, config)
 }
+
+// tlsClientFactory calls txp.TLSClientFactory if set, otherwise
+// it calls the oohttp.TLSClientFactory global factory.
+func (t *Transport) tlsClientFactory(conn net.Conn, config *tls.Config) TLSConn {
+	if t.TLSClientFactory != nil {
+		return t.TLSClientFactory(conn, config)
+	}
+	return TLSClientFactory(conn, config)
+}
