@@ -5537,8 +5537,9 @@ func TestTransportClone(t *testing.T) {
 		TLSNextProto: map[string]func(authority string, c TLSConn) RoundTripper{
 			"foo": func(authority string, c TLSConn) RoundTripper { panic("") },
 		},
-		ReadBufferSize:  1,
-		WriteBufferSize: 1,
+		ReadBufferSize:   1,
+		WriteBufferSize:  1,
+		TLSClientFactory: TLSClientFactory, // set to the global one
 	}
 	tr2 := tr.Clone()
 	rv := reflect.ValueOf(tr2).Elem()
