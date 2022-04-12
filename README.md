@@ -227,7 +227,7 @@ git checkout main
 git remote add golang git@github.com:golang/go.git || git fetch golang
 git branch -D golang-upstream golang-http-upstream merged-main || true
 git fetch golang
-git checkout -b golang-upstream go1.17.3
+git checkout -b golang-upstream go1.17.8
 git subtree split -P src/net/http/ -b golang-http-upstream
 git checkout main
 git checkout -b merged-main
