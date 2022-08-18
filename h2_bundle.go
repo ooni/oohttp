@@ -6825,7 +6825,7 @@ type http2Transport struct {
 	DialTLS func(network, addr string, cfg *tls.Config) (net.Conn, error)
 
 	// TLSClientConfig specifies the TLS configuration to use with
-	// tls.Client. If nil, the default configuration is used.
+	// TLSClientFactory. If nil, the default configuration is used.
 	TLSClientConfig *tls.Config
 
 	// ConnPool optionally specifies an alternate connection pool to use.

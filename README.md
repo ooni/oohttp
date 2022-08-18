@@ -237,9 +237,11 @@ git merge golang-http-upstream
 - [ ] solve the very-likely merge conflicts and ensure [the original spirit of the
 patches](#patches) still hold;
 
-- [ ] make sure the codebase does not assume `*tls.Conn` *anywhere* (`git grep '\*tls\.Conn'`);
+- [ ] make sure the codebase does not assume `*tls.Conn` *anywhere* (`git grep -n '\*tls\.Conn'`)
+and otherwise replace `*tls.Conn` with `TLSConn`;
 
-- [ ] make sure the codebase does not call `tls.Client` *anywhere* (`git grep '\*tls\.Client'`);
+- [ ] make sure the codebase does not call `tls.Client` *anywhere* (`git grep -n 'tls\.Client'`)
+and otherwise replace `tls.Client` with `TLSClientFactory`;
 
 - [ ] ensure `go build -v ./...` still works;
 
