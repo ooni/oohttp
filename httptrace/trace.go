@@ -31,12 +31,24 @@ func ContextClientTrace(ctx context.Context) *ClientTrace {
 // registered with ctx. Any hooks defined in the provided trace will
 // be called first.
 func WithClientTrace(ctx context.Context, trace *ClientTrace) context.Context {
+	return withClientTrace(ctx, trace, true)
+}
+
+// WithClientTraceWithoutComposition is like WithClientTrace except that
+// we're not going to compose with any old trace there may be inside of the
+// chain of contexts. This API seems useful to implement OONI Probe.
+func WithClientTraceWithoutComposition(ctx context.Context, trace *ClientTrace) context.Context {
+	return withClientTrace(ctx, trace, false)
+}
+
+func withClientTrace(ctx context.Context, trace *ClientTrace, compose bool) context.Context {
 	if trace == nil {
 		panic("nil trace")
 	}
-	old := ContextClientTrace(ctx)
-	trace.compose(old)
-
+	if compose {
+		old := ContextClientTrace(ctx)
+		trace.compose(old)
+	}
 	ctx = context.WithValue(ctx, clientEventContextKey{}, trace)
 	return ctx
 }
