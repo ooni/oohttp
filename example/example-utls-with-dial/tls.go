@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"net"
 
 	oohttp "github.com/ooni/oohttp"
 	utls "github.com/refraction-networking/utls"
@@ -10,7 +11,11 @@ import (
 
 // utlsConnAdapter adapts utls.UConn to the oohttp.TLSConn interface.
 type utlsConnAdapter struct {
+	// UConn is the underlying utls.UConn
 	*utls.UConn
+
+	// conn is here to implement NetConn
+	conn net.Conn
 }
 
 var _ oohttp.TLSConn = &utlsConnAdapter{}
@@ -46,4 +51,9 @@ func (c *utlsConnAdapter) HandshakeContext(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+// NetConn implements TLSConn's NetConn
+func (c *utlsConnAdapter) NetConn() net.Conn {
+	return c.conn
 }
