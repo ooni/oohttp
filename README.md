@@ -250,6 +250,8 @@ and otherwise replace `tls.Client` with `TLSClientFactory`;
 - [ ] ensure [stdlibwrapper.go](stdlibwrapper.go) copies all
 the `Request` and `Response` fields;
 
+- [ ] run `go get -u -v ./... && go mod tidy`;
+
 - [ ] commit the changes and push `merged-main` to gitub;
 
 - [ ] open a PR and merge it *using a merge commit*;

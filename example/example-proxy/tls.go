@@ -11,7 +11,11 @@ import (
 
 // utlsConnAdapter adapts utls.UConn to the oohttp.TLSConn interface.
 type utlsConnAdapter struct {
+	// UConn is the underlying utls.UConn
 	*utls.UConn
+
+	// conn is here to implement NetConn
+	conn net.Conn
 }
 
 var _ oohttp.TLSConn = &utlsConnAdapter{}
@@ -49,6 +53,11 @@ func (c *utlsConnAdapter) HandshakeContext(ctx context.Context) error {
 	}
 }
 
+// NetConn implements TLSConn's NetConn
+func (c *utlsConnAdapter) NetConn() net.Conn {
+	return c.conn
+}
+
 // utlsFactory creates a new uTLS connection.
 func utlsFactory(conn net.Conn, config *tls.Config) oohttp.TLSConn {
 	uConfig := &utls.Config{
@@ -58,5 +67,8 @@ func utlsFactory(conn net.Conn, config *tls.Config) oohttp.TLSConn {
 		InsecureSkipVerify:          config.InsecureSkipVerify,
 		DynamicRecordSizingDisabled: config.DynamicRecordSizingDisabled,
 	}
-	return &utlsConnAdapter{utls.UClient(conn, uConfig, utls.HelloFirefox_55)}
+	return &utlsConnAdapter{
+		UConn: utls.UClient(conn, uConfig, utls.HelloFirefox_55),
+		conn:  conn,
+	}
 }

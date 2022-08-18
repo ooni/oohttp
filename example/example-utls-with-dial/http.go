@@ -32,7 +32,10 @@ func dialTLSContext(ctx context.Context, network string, addr string) (net.Conn,
 	// Implementation note: using Firefox 55 ClientHello because that
 	// avoids a bunch of issues, e.g., Brotli encrypted x509 certs.
 	uconn := utls.UClient(conn, uconfig, utls.HelloFirefox_55)
-	uadapter := &utlsConnAdapter{uconn}
+	uadapter := &utlsConnAdapter{
+		UConn: uconn,
+		conn:  conn,
+	}
 	if err := uadapter.HandshakeContext(ctx); err != nil {
 		conn.Close()
 		return nil, err
