@@ -3010,7 +3010,7 @@ func (t *http2Transport) dialTLSWithContext(ctx context.Context, network, addr s
 	return tlsCn, nil
 }
 
-func http2tlsUnderlyingConn(tc *tls.Conn) net.Conn {
+func http2tlsUnderlyingConn(tc TLSConn) net.Conn {
 	return tc.NetConn()
 }
 
@@ -7668,7 +7668,7 @@ func (cc *http2ClientConn) closeConn() error {
 // A tls.Conn.Close can hang for a long time if the peer is unresponsive.
 // Try to shut it down more aggressively.
 func (cc *http2ClientConn) forceCloseConn() {
-	tc, ok := cc.tconn.(*tls.Conn)
+	tc, ok := cc.tconn.(TLSConn)
 	if !ok {
 		return
 	}
