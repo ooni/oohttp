@@ -30,7 +30,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"math"
 	mathrand "math/rand"
@@ -1294,7 +1293,7 @@ func (e http2headerFieldNameError) Error() string {
 type http2headerFieldValueError string
 
 func (e http2headerFieldValueError) Error() string {
-	return fmt.Sprintf("invalid header field value %q", string(e))
+	return fmt.Sprintf("invalid header field value for %q", string(e))
 }
 
 var (
@@ -2864,7 +2863,8 @@ func (fr *http2Framer) readMetaFrame(hf *http2HeadersFrame) (*http2MetaHeadersFr
 			fr.debugReadLoggerf("http2: decoded hpack field %+v", hf)
 		}
 		if !httpguts.ValidHeaderFieldValue(hf.Value) {
-			invalid = http2headerFieldValueError(hf.Value)
+			// Don't include the value in the error, because it may be sensitive.
+			invalid = http2headerFieldValueError(hf.Name)
 		}
 		isPseudo := strings.HasPrefix(hf.Name, ":")
 		if isPseudo {
@@ -3008,6 +3008,10 @@ func (t *http2Transport) dialTLSWithContext(ctx context.Context, network, addr s
 	}
 	tlsCn := cn.(TLSConn) // DialContext comment promises this will always succeed
 	return tlsCn, nil
+}
+
+func http2tlsUnderlyingConn(tc TLSConn) net.Conn {
+	return tc.NetConn()
 }
 
 var http2DebugGoroutines = os.Getenv("DEBUG_HTTP2_GOROUTINES") == "1"
@@ -3384,10 +3388,11 @@ func (s http2SettingID) String() string {
 // name (key). See httpguts.ValidHeaderName for the base rules.
 //
 // Further, http2 says:
-//   "Just as in HTTP/1.x, header field names are strings of ASCII
-//   characters that are compared in a case-insensitive
-//   fashion. However, header field names MUST be converted to
-//   lowercase prior to their encoding in HTTP/2. "
+//
+//	"Just as in HTTP/1.x, header field names are strings of ASCII
+//	characters that are compared in a case-insensitive
+//	fashion. However, header field names MUST be converted to
+//	lowercase prior to their encoding in HTTP/2. "
 func http2validWireHeaderFieldName(v string) bool {
 	if len(v) == 0 {
 		return false
@@ -3578,8 +3583,8 @@ func (s *http2sorter) SortStrings(ss []string) {
 // validPseudoPath reports whether v is a valid :path pseudo-header
 // value. It must be either:
 //
-//     *) a non-empty string starting with '/'
-//     *) the string '*', for OPTIONS requests.
+//   - a non-empty string starting with '/'
+//   - the string '*', for OPTIONS requests.
 //
 // For now this is only used a quick check for deciding when to clean
 // up Opaque URLs before sending requests from the Transport.
@@ -4114,7 +4119,7 @@ func (s *http2Server) ServeConn(c net.Conn, opts *http2ServeConnOpts) {
 	if s.NewWriteScheduler != nil {
 		sc.writeSched = s.NewWriteScheduler()
 	} else {
-		sc.writeSched = http2NewRandomWriteScheduler()
+		sc.writeSched = http2NewPriorityWriteScheduler(nil)
 	}
 
 	// These start at the RFC-specified defaults. If there is a higher
@@ -4439,7 +4444,7 @@ func (sc *http2serverConn) canonicalHeader(v string) string {
 	// maxCachedCanonicalHeaders is an arbitrarily-chosen limit on the number of
 	// entries in the canonHeader cache. This should be larger than the number
 	// of unique, uncommon header keys likely to be sent by the peer, while not
-	// so high as to permit unreaasonable memory usage if the peer sends an unbounded
+	// so high as to permit unreasonable memory usage if the peer sends an unbounded
 	// number of unique header keys.
 	const maxCachedCanonicalHeaders = 32
 	if len(sc.canonHeader) < maxCachedCanonicalHeaders {
@@ -6035,17 +6040,18 @@ type http2requestBody struct {
 	_             http2incomparable
 	stream        *http2stream
 	conn          *http2serverConn
-	closed        bool       // for use by Close only
+	closeOnce     sync.Once  // for use by Close only
 	sawEOF        bool       // for use by Read only
 	pipe          *http2pipe // non-nil if we have a HTTP entity message body
 	needsContinue bool       // need to send a 100-continue
 }
 
 func (b *http2requestBody) Close() error {
-	if b.pipe != nil && !b.closed {
-		b.pipe.BreakWithError(http2errClosedBody)
-	}
-	b.closed = true
+	b.closeOnce.Do(func() {
+		if b.pipe != nil {
+			b.pipe.BreakWithError(http2errClosedBody)
+		}
+	})
 	return nil
 }
 
@@ -6265,8 +6271,9 @@ func (rws *http2responseWriterState) writeChunk(p []byte) (n int, err error) {
 // prior to the headers being written. If the set of trailers is fixed
 // or known before the header is written, the normal Go trailers mechanism
 // is preferred:
-//    https://golang.org/pkg/net/http/#ResponseWriter
-//    https://golang.org/pkg/net/http/#example_ResponseWriter_trailers
+//
+//	https://golang.org/pkg/net/http/#ResponseWriter
+//	https://golang.org/pkg/net/http/#example_ResponseWriter_trailers
 const http2TrailerPrefix = "Trailer:"
 
 // promoteUndeclaredTrailers permits http.Handlers to set trailers
@@ -6362,8 +6369,7 @@ func http2checkWriteHeaderCode(code int) {
 	// Issue 22880: require valid WriteHeader status codes.
 	// For now we only enforce that it's three digits.
 	// In the future we might block things over 599 (600 and above aren't defined
-	// at http://httpwg.org/specs/rfc7231.html#status.codes)
-	// and we might block under 200 (once we have more mature 1xx support).
+	// at http://httpwg.org/specs/rfc7231.html#status.codes).
 	// But for now any three digits.
 	//
 	// We used to send "HTTP/1.1 000 0" on the wire in responses but there's
@@ -6384,13 +6390,41 @@ func (w *http2responseWriter) WriteHeader(code int) {
 }
 
 func (rws *http2responseWriterState) writeHeader(code int) {
-	if !rws.wroteHeader {
-		http2checkWriteHeaderCode(code)
-		rws.wroteHeader = true
-		rws.status = code
-		if len(rws.handlerHeader) > 0 {
-			rws.snapHeader = http2cloneHeader(rws.handlerHeader)
+	if rws.wroteHeader {
+		return
+	}
+
+	http2checkWriteHeaderCode(code)
+
+	// Handle informational headers
+	if code >= 100 && code <= 199 {
+		// Per RFC 8297 we must not clear the current header map
+		h := rws.handlerHeader
+
+		_, cl := h["Content-Length"]
+		_, te := h["Transfer-Encoding"]
+		if cl || te {
+			h = h.Clone()
+			h.Del("Content-Length")
+			h.Del("Transfer-Encoding")
 		}
+
+		if rws.conn.writeHeaders(rws.stream, &http2writeResHeaders{
+			streamID:    rws.stream.id,
+			httpResCode: code,
+			h:           h,
+			endStream:   rws.handlerDone && !rws.hasTrailers(),
+		}) != nil {
+			rws.dirty = true
+		}
+
+		return
+	}
+
+	rws.wroteHeader = true
+	rws.status = code
+	if len(rws.handlerHeader) > 0 {
+		rws.snapHeader = http2cloneHeader(rws.handlerHeader)
 	}
 }
 
@@ -6791,7 +6825,7 @@ type http2Transport struct {
 	DialTLS func(network, addr string, cfg *tls.Config) (net.Conn, error)
 
 	// TLSClientConfig specifies the TLS configuration to use with
-	// tls.Client. If nil, the default configuration is used.
+	// TLSClientFactory. If nil, the default configuration is used.
 	TLSClientConfig *tls.Config
 
 	// ConnPool optionally specifies an alternate connection pool to use.
@@ -7215,12 +7249,14 @@ func (t *http2Transport) RoundTripOpt(req *Request, opt http2RoundTripOpt) (*Res
 			if req, err = http2shouldRetryRequest(req, err); err == nil {
 				// After the first retry, do exponential backoff with 10% jitter.
 				if retry == 0 {
+					t.vlogf("RoundTrip retrying after failure: %v", err)
 					continue
 				}
 				backoff := float64(uint(1) << (uint(retry) - 1))
 				backoff += backoff * (0.1 * mathrand.Float64())
 				select {
 				case <-time.After(time.Second * time.Duration(backoff)):
+					t.vlogf("RoundTrip retrying after failure: %v", err)
 					continue
 				case <-req.Context().Done():
 					err = req.Context().Err()
@@ -7446,11 +7482,13 @@ func (cc *http2ClientConn) healthCheck() {
 	// trigger the healthCheck again if there is no frame received.
 	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
 	defer cancel()
+	cc.vlogf("http2: Transport sending health check")
 	err := cc.Ping(ctx)
 	if err != nil {
+		cc.vlogf("http2: Transport health check failure: %v", err)
 		cc.closeForLostPing()
-		cc.t.connPool().MarkDead(cc)
-		return
+	} else {
+		cc.vlogf("http2: Transport health check success")
 	}
 }
 
@@ -7621,6 +7659,24 @@ func (cc *http2ClientConn) onIdleTimeout() {
 	cc.closeIfIdle()
 }
 
+func (cc *http2ClientConn) closeConn() error {
+	t := time.AfterFunc(250*time.Millisecond, cc.forceCloseConn)
+	defer t.Stop()
+	return cc.tconn.Close()
+}
+
+// A tls.Conn.Close can hang for a long time if the peer is unresponsive.
+// Try to shut it down more aggressively.
+func (cc *http2ClientConn) forceCloseConn() {
+	tc, ok := cc.tconn.(TLSConn)
+	if !ok {
+		return
+	}
+	if nc := http2tlsUnderlyingConn(tc); nc != nil {
+		nc.Close()
+	}
+}
+
 func (cc *http2ClientConn) closeIfIdle() {
 	cc.mu.Lock()
 	if len(cc.streams) > 0 || cc.streamsReserved > 0 {
@@ -7635,7 +7691,7 @@ func (cc *http2ClientConn) closeIfIdle() {
 	if http2VerboseLogs {
 		cc.vlogf("http2: Transport closing idle conn %p (forSingleUse=%v, maxStream=%v)", cc, cc.singleUse, nextID-2)
 	}
-	cc.tconn.Close()
+	cc.closeConn()
 }
 
 func (cc *http2ClientConn) isDoNotReuseAndIdle() bool {
@@ -7652,7 +7708,7 @@ func (cc *http2ClientConn) Shutdown(ctx context.Context) error {
 		return err
 	}
 	// Wait for all in-flight streams to complete or connection to close
-	done := make(chan error, 1)
+	done := make(chan struct{})
 	cancelled := false // guarded by cc.mu
 	go func() {
 		cc.mu.Lock()
@@ -7660,7 +7716,7 @@ func (cc *http2ClientConn) Shutdown(ctx context.Context) error {
 		for {
 			if len(cc.streams) == 0 || cc.closed {
 				cc.closed = true
-				done <- cc.tconn.Close()
+				close(done)
 				break
 			}
 			if cancelled {
@@ -7671,8 +7727,8 @@ func (cc *http2ClientConn) Shutdown(ctx context.Context) error {
 	}()
 	http2shutdownEnterWaitStateHook()
 	select {
-	case err := <-done:
-		return err
+	case <-done:
+		return cc.closeConn()
 	case <-ctx.Done():
 		cc.mu.Lock()
 		// Free the goroutine above
@@ -7715,9 +7771,9 @@ func (cc *http2ClientConn) closeForError(err error) error {
 	for _, cs := range cc.streams {
 		cs.abortStreamLocked(err)
 	}
-	defer cc.cond.Broadcast()
-	defer cc.mu.Unlock()
-	return cc.tconn.Close()
+	cc.cond.Broadcast()
+	cc.mu.Unlock()
+	return cc.closeConn()
 }
 
 // Close closes the client connection immediately.
@@ -8462,7 +8518,8 @@ func (cc *http2ClientConn) encodeHeaders(req *Request, addGzipHeader bool, trail
 		}
 		for _, v := range vv {
 			if !httpguts.ValidHeaderFieldValue(v) {
-				return nil, fmt.Errorf("invalid HTTP header value %q for header %q", v, k)
+				// Don't include the value in the error, because it may be sensitive.
+				return nil, fmt.Errorf("invalid HTTP header value for header %q", k)
 			}
 		}
 	}
@@ -8692,7 +8749,7 @@ func (cc *http2ClientConn) forgetStreamID(id uint32) {
 			cc.vlogf("http2: Transport closing idle conn %p (forSingleUse=%v, maxStream=%v)", cc, cc.singleUse, cc.nextStreamID-2)
 		}
 		cc.closed = true
-		defer cc.tconn.Close()
+		defer cc.closeConn()
 	}
 
 	cc.mu.Unlock()
@@ -8739,8 +8796,8 @@ func http2isEOFOrNetReadError(err error) bool {
 
 func (rl *http2clientConnReadLoop) cleanup() {
 	cc := rl.cc
-	defer cc.tconn.Close()
-	defer cc.t.connPool().MarkDead(cc)
+	cc.t.connPool().MarkDead(cc)
+	defer cc.closeConn()
 	defer close(cc.readerDone)
 
 	if cc.idleTimer != nil {
@@ -9595,7 +9652,13 @@ func (t *http2Transport) logf(format string, args ...interface{}) {
 	log.Printf(format, args...)
 }
 
-var http2noBody io.ReadCloser = ioutil.NopCloser(bytes.NewReader(nil))
+var http2noBody io.ReadCloser = http2noBodyReader{}
+
+type http2noBodyReader struct{}
+
+func (http2noBodyReader) Close() error { return nil }
+
+func (http2noBodyReader) Read([]byte) (int, error) { return 0, io.EOF }
 
 type http2missingBody struct{}
 

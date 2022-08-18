@@ -9,6 +9,7 @@ package http_test
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/rand"
 	"crypto/sha1"
 	"crypto/tls"
@@ -17,6 +18,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/textproto"
 	"net/url"
 	"os"
 	"reflect"
@@ -30,6 +32,7 @@ import (
 
 	. "github.com/ooni/oohttp"
 	"github.com/ooni/oohttp/httptest"
+	"github.com/ooni/oohttp/httptrace"
 	"github.com/ooni/oohttp/httputil"
 )
 
@@ -990,7 +993,7 @@ func TestTransportDiscardsUnneededConns(t *testing.T) {
 			}
 			atomic.AddInt32(&numOpen, 1)
 			c := noteCloseConn{rc, func() { atomic.AddInt32(&numClose, 1) }}
-			return tls.Client(c, tlsConfig), nil
+			return TLSClientFactory(c, tlsConfig), nil
 		},
 	}
 	if err := ExportHttp2ConfigureTransport(tr); err != nil {
@@ -1615,5 +1618,94 @@ func testIdentityTransferEncoding(t *testing.T, h2 bool) {
 	}
 	if got, want := string(gotBody), body; got != want {
 		t.Errorf("got response body = %q; want %q", got, want)
+	}
+}
+
+func TestEarlyHintsRequest_h1(t *testing.T) { testEarlyHintsRequest(t, h1Mode) }
+func TestEarlyHintsRequest_h2(t *testing.T) { testEarlyHintsRequest(t, h2Mode) }
+func testEarlyHintsRequest(t *testing.T, h2 bool) {
+	defer afterTest(t)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	cst := newClientServerTest(t, h2, HandlerFunc(func(w ResponseWriter, r *Request) {
+		h := w.Header()
+
+		h.Add("Content-Length", "123") // must be ignored
+		h.Add("Link", "</style.css>; rel=preload; as=style")
+		h.Add("Link", "</script.js>; rel=preload; as=script")
+		w.WriteHeader(StatusEarlyHints)
+
+		wg.Wait()
+
+		h.Add("Link", "</foo.js>; rel=preload; as=script")
+		w.WriteHeader(StatusEarlyHints)
+
+		w.Write([]byte("Hello"))
+	}))
+	defer cst.close()
+
+	checkLinkHeaders := func(t *testing.T, expected, got []string) {
+		t.Helper()
+
+		if len(expected) != len(got) {
+			t.Errorf("got %d expected %d", len(got), len(expected))
+		}
+
+		for i := range expected {
+			if expected[i] != got[i] {
+				t.Errorf("got %q expected %q", got[i], expected[i])
+			}
+		}
+	}
+
+	checkExcludedHeaders := func(t *testing.T, header textproto.MIMEHeader) {
+		t.Helper()
+
+		for _, h := range []string{"Content-Length", "Transfer-Encoding"} {
+			if v, ok := header[h]; ok {
+				t.Errorf("%s is %q; must not be sent", h, v)
+			}
+		}
+	}
+
+	var respCounter uint8
+	trace := &httptrace.ClientTrace{
+		Got1xxResponse: func(code int, header textproto.MIMEHeader) error {
+			switch respCounter {
+			case 0:
+				checkLinkHeaders(t, []string{"</style.css>; rel=preload; as=style", "</script.js>; rel=preload; as=script"}, header["Link"])
+				checkExcludedHeaders(t, header)
+
+				wg.Done()
+			case 1:
+				checkLinkHeaders(t, []string{"</style.css>; rel=preload; as=style", "</script.js>; rel=preload; as=script", "</foo.js>; rel=preload; as=script"}, header["Link"])
+				checkExcludedHeaders(t, header)
+
+			default:
+				t.Error("Unexpected 1xx response")
+			}
+
+			respCounter++
+
+			return nil
+		},
+	}
+	req, _ := NewRequestWithContext(httptrace.WithClientTrace(context.Background(), trace), "GET", cst.ts.URL, nil)
+
+	res, err := cst.c.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	checkLinkHeaders(t, []string{"</style.css>; rel=preload; as=style", "</script.js>; rel=preload; as=script", "</foo.js>; rel=preload; as=script"}, res.Header["Link"])
+	if cl := res.Header.Get("Content-Length"); cl != "123" {
+		t.Errorf("Content-Length is %q; want 123", cl)
+	}
+
+	body, _ := io.ReadAll(res.Body)
+	if string(body) != "Hello" {
+		t.Errorf("Read body %q; want Hello", body)
 	}
 }
