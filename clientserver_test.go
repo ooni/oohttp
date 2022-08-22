@@ -990,7 +990,7 @@ func TestTransportDiscardsUnneededConns(t *testing.T) {
 			}
 			atomic.AddInt32(&numOpen, 1)
 			c := noteCloseConn{rc, func() { atomic.AddInt32(&numClose, 1) }}
-			return tls.Client(c, tlsConfig), nil
+			return TLSClientFactory(c, tlsConfig), nil
 		},
 	}
 	if err := ExportHttp2ConfigureTransport(tr); err != nil {
