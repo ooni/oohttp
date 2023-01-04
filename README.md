@@ -227,12 +227,15 @@ git checkout stable
 git remote add golang git@github.com:golang/go.git || git fetch golang
 git branch -D golang-upstream golang-http-upstream merged-stable || true
 git fetch golang
-git checkout -b golang-upstream go1.18.6
+git checkout -b golang-upstream go1.18.9
 git subtree split -P src/net/http/ -b golang-http-upstream
 git checkout stable
 git checkout -b merged-stable
 git merge golang-http-upstream
 ```
+
+- [ ] make sure you synch [./internal/safefilepath](./internal/safefilepath) with the
+`./src/internal/safefilepath` of the Go release you're merging from;
 
 - [ ] solve the very-likely merge conflicts and ensure [the original spirit of the
 patches](#patches) still hold;
