@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"log"
 	"net"
 	"net/http"
@@ -17,9 +18,17 @@ var defaultDialer = &net.Dialer{
 	KeepAlive: 30 * time.Second,
 }
 
-// dialTLSContext dials a TLS connection using refraction-networking/utls
+// tlsDialer is a dialer that uses TLS
+type tlsDialer struct {
+	// config is the optional config. In case it's not nil, we will
+	// use its RootCAs value, if any, and we'll override the default
+	// ServerName with its ServerName value, if any.
+	config *tls.Config
+}
+
+// dial dials a TLS connection using refraction-networking/utls
 // and returns a TLSConn compatible net.Conn.
-func dialTLSContext(ctx context.Context, network string, addr string) (net.Conn, error) {
+func (d *tlsDialer) dial(ctx context.Context, network string, addr string) (net.Conn, error) {
 	conn, err := defaultDialer.DialContext(ctx, network, addr)
 	if err != nil {
 		return nil, err
@@ -29,6 +38,14 @@ func dialTLSContext(ctx context.Context, network string, addr string) (net.Conn,
 		return nil, err
 	}
 	uconfig := &utls.Config{ServerName: sni}
+	if d.config != nil {
+		if d.config.RootCAs != nil {
+			uconfig.RootCAs = d.config.RootCAs // as documented
+		}
+		if d.config.ServerName != "" {
+			uconfig.ServerName = d.config.ServerName // as documented
+		}
+	}
 	// Implementation note: using Firefox 55 ClientHello because that
 	// avoids a bunch of issues, e.g., Brotli encrypted x509 certs.
 	uconn := utls.UClient(conn, uconfig, utls.HelloFirefox_55)
@@ -59,4 +76,4 @@ func newTransport(f func(ctx context.Context, network, address string) (net.Conn
 }
 
 // defaultTransport is the default http.RoundTripper.
-var defaultTransport = newTransport(dialTLSContext)
+var defaultTransport = newTransport((&tlsDialer{}).dial)
