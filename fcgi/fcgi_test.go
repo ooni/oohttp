@@ -402,16 +402,16 @@ func TestResponseWriterSniffsContentType(t *testing.T) {
 	}
 }
 
-type signalingNopCloser struct {
+type signallingNopCloser struct {
 	io.Reader
 	closed chan bool
 }
 
-func (*signalingNopCloser) Write(buf []byte) (int, error) {
+func (*signallingNopCloser) Write(buf []byte) (int, error) {
 	return len(buf), nil
 }
 
-func (rc *signalingNopCloser) Close() error {
+func (rc *signallingNopCloser) Close() error {
 	close(rc.closed)
 	return nil
 }
@@ -430,7 +430,7 @@ func TestSlowRequest(t *testing.T) {
 		}
 	}(pw)
 
-	rc := &signalingNopCloser{pr, make(chan bool)}
+	rc := &signallingNopCloser{pr, make(chan bool)}
 	handlerDone := make(chan bool)
 
 	c := newChild(rc, http.HandlerFunc(func(

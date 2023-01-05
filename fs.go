@@ -544,7 +544,6 @@ func writeNotModified(w ResponseWriter) {
 	h := w.Header()
 	delete(h, "Content-Type")
 	delete(h, "Content-Length")
-	delete(h, "Content-Encoding")
 	if h.Get("Etag") != "" {
 		delete(h, "Last-Modified")
 	}
@@ -835,11 +834,12 @@ func FS(fsys fs.FS) FileSystem {
 // To use the operating system's file system implementation,
 // use http.Dir:
 //
-//	http.Handle("/", http.FileServer(http.Dir("/tmp")))
+//     http.Handle("/", http.FileServer(http.Dir("/tmp")))
 //
 // To use an fs.FS implementation, use http.FS to convert it:
 //
 //	http.Handle("/", http.FileServer(http.FS(fsys)))
+//
 func FileServer(root FileSystem) Handler {
 	return &fileHandler{root}
 }

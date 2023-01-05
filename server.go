@@ -97,8 +97,8 @@ type ResponseWriter interface {
 	// Handlers can set HTTP trailers.
 	//
 	// Changing the header map after a call to WriteHeader (or
-	// Write) has no effect unless the HTTP status code was of the
-	// 1xx class or the modified headers are trailers.
+	// Write) has no effect unless the modified headers are
+	// trailers.
 	//
 	// There are two ways to set Trailers. The preferred way is to
 	// predeclare in the headers which trailers you will later
@@ -143,18 +143,13 @@ type ResponseWriter interface {
 	// If WriteHeader is not called explicitly, the first call to Write
 	// will trigger an implicit WriteHeader(http.StatusOK).
 	// Thus explicit calls to WriteHeader are mainly used to
-	// send error codes or 1xx informational responses.
+	// send error codes.
 	//
 	// The provided code must be a valid HTTP 1xx-5xx status code.
-	// Any number of 1xx headers may be written, followed by at most
-	// one 2xx-5xx header. 1xx headers are sent immediately, but 2xx-5xx
-	// headers may be buffered. Use the Flusher interface to send
-	// buffered data. The header map is cleared when 2xx-5xx headers are
-	// sent, but not with 1xx headers.
-	//
-	// The server will automatically send a 100 (Continue) header
-	// on the first read from the request body if the request has
-	// an "Expect: 100-continue" header.
+	// Only one header may be written. Go does not currently
+	// support sending user-defined 1xx informational headers,
+	// with the exception of 100-continue response header that the
+	// Server sends automatically when the Request.Body is read.
 	WriteHeader(statusCode int)
 }
 
@@ -424,7 +419,7 @@ type response struct {
 	req              *Request // request for this response
 	reqBody          io.ReadCloser
 	cancelCtx        context.CancelFunc // when ServeHTTP exits
-	wroteHeader      bool               // a non-1xx header has been (logically) written
+	wroteHeader      bool               // reply header has been (logically) written
 	wroteContinue    bool               // 100 Continue response was written
 	wants10KeepAlive bool               // HTTP/1.0 w/ Connection "keep-alive"
 	wantsClose       bool               // HTTP request has Connection "close"
@@ -498,9 +493,8 @@ type response struct {
 // prior to the headers being written. If the set of trailers is fixed
 // or known before the header is written, the normal Go trailers mechanism
 // is preferred:
-//
-//	https://pkg.go.dev/net/http#ResponseWriter
-//	https://pkg.go.dev/net/http#example-ResponseWriter-Trailers
+//    https://pkg.go.dev/net/http#ResponseWriter
+//    https://pkg.go.dev/net/http#example-ResponseWriter-Trailers
 const TrailerPrefix = "Trailer:"
 
 // finalTrailers is called after the Handler exits and returns a non-nil
@@ -1104,7 +1098,8 @@ func checkWriteHeaderCode(code int) {
 	// Issue 22880: require valid WriteHeader status codes.
 	// For now we only enforce that it's three digits.
 	// In the future we might block things over 599 (600 and above aren't defined
-	// at https://httpwg.org/specs/rfc7231.html#status.codes).
+	// at https://httpwg.org/specs/rfc7231.html#status.codes)
+	// and we might block under 200 (once we have more mature 1xx support).
 	// But for now any three digits.
 	//
 	// We used to send "HTTP/1.1 000 0" on the wire in responses but there's
@@ -1147,26 +1142,6 @@ func (w *response) WriteHeader(code int) {
 		return
 	}
 	checkWriteHeaderCode(code)
-
-	// Handle informational headers
-	if code >= 100 && code <= 199 {
-		// Prevent a potential race with an automatically-sent 100 Continue triggered by Request.Body.Read()
-		if code == 100 && w.canWriteContinue.isSet() {
-			w.writeContinueMu.Lock()
-			w.canWriteContinue.setFalse()
-			w.writeContinueMu.Unlock()
-		}
-
-		writeStatusLine(w.conn.bufw, w.req.ProtoAtLeast(1, 1), code, w.statusBuf[:])
-
-		// Per RFC 8297 we must not clear the current header map
-		w.handlerHeader.WriteSubset(w.conn.bufw, excludedHeadersNoBody)
-		w.conn.bufw.Write(crlf)
-		w.conn.bufw.Flush()
-
-		return
-	}
-
 	w.wroteHeader = true
 	w.status = code
 
@@ -1539,7 +1514,7 @@ func writeStatusLine(bw *bufio.Writer, is11 bool, code int, scratch []byte) {
 	} else {
 		bw.WriteString("HTTP/1.0 ")
 	}
-	if text := StatusText(code); text != "" {
+	if text, ok := statusText[code]; ok {
 		bw.Write(strconv.AppendInt(scratch[:0], int64(code), 10))
 		bw.WriteByte(' ')
 		bw.WriteString(text)
@@ -1575,14 +1550,14 @@ func (w *response) bodyAllowed() bool {
 //
 // The Writers are wired together like:
 //
-//  1. *response (the ResponseWriter) ->
-//  2. (*response).w, a *bufio.Writer of bufferBeforeChunkingSize bytes ->
-//  3. chunkWriter.Writer (whose writeHeader finalizes Content-Length/Type)
-//     and which writes the chunk headers, if needed ->
-//  4. conn.bufw, a *bufio.Writer of default (4kB) bytes, writing to ->
-//  5. checkConnErrorWriter{c}, which notes any non-nil error on Write
-//     and populates c.werr with it if so, but otherwise writes to ->
-//  6. the rwc, the net.Conn.
+// 1. *response (the ResponseWriter) ->
+// 2. (*response).w, a *bufio.Writer of bufferBeforeChunkingSize bytes ->
+// 3. chunkWriter.Writer (whose writeHeader finalizes Content-Length/Type)
+//    and which writes the chunk headers, if needed ->
+// 4. conn.bufw, a *bufio.Writer of default (4kB) bytes, writing to ->
+// 5. checkConnErrorWriter{c}, which notes any non-nil error on Write
+//    and populates c.werr with it if so, but otherwise writes to ->
+// 6. the rwc, the net.Conn.
 //
 // TODO(bradfitz): short-circuit some of the buffering when the
 // initial header contains both a Content-Type and Content-Length.
@@ -1745,7 +1720,7 @@ type closeWriter interface {
 var _ closeWriter = (*net.TCPConn)(nil)
 
 // closeWrite flushes any outstanding data and sends a FIN packet (if
-// client is connected via TCP), signaling that we're done. We then
+// client is connected via TCP), signalling that we're done. We then
 // pause for a bit, hoping the client processes it before any
 // subsequent RST.
 //
@@ -2125,7 +2100,7 @@ func Error(w ResponseWriter, error string, code int) {
 func NotFound(w ResponseWriter, r *Request) { Error(w, "404 page not found", StatusNotFound) }
 
 // NotFoundHandler returns a simple request handler
-// that replies to each request with a “404 page not found” reply.
+// that replies to each request with a ``404 page not found'' reply.
 func NotFoundHandler() Handler { return HandlerFunc(NotFound) }
 
 // StripPrefix returns a handler that serves HTTP requests by removing the
@@ -2215,7 +2190,7 @@ func Redirect(w ResponseWriter, r *Request, url string, code int) {
 
 	// Shouldn't send the body for POST or HEAD; that leaves GET.
 	if !hadCT && r.Method == "GET" {
-		body := "<a href=\"" + htmlEscape(url) + "\">" + StatusText(code) + "</a>.\n"
+		body := "<a href=\"" + htmlEscape(url) + "\">" + statusText[code] + "</a>.\n"
 		fmt.Fprintln(w, body)
 	}
 }
@@ -2418,7 +2393,7 @@ func (mux *ServeMux) shouldRedirectRLocked(host, path string) bool {
 // the pattern that will match after following the redirect.
 //
 // If there is no registered handler that applies to the request,
-// Handler returns a “page not found” handler and an empty pattern.
+// Handler returns a ``page not found'' handler and an empty pattern.
 func (mux *ServeMux) Handler(r *Request) (h Handler, pattern string) {
 
 	// CONNECT requests are not canonicalized.
@@ -2689,8 +2664,6 @@ type Server struct {
 	activeConn map[*conn]struct{}
 	doneChan   chan struct{}
 	onShutdown []func()
-
-	listenerGroup sync.WaitGroup
 }
 
 func (s *Server) getDoneChan() <-chan struct{} {
@@ -2733,15 +2706,6 @@ func (srv *Server) Close() error {
 	defer srv.mu.Unlock()
 	srv.closeDoneChanLocked()
 	err := srv.closeListenersLocked()
-
-	// Unlock srv.mu while waiting for listenerGroup.
-	// The group Add and Done calls are made with srv.mu held,
-	// to avoid adding a new listener in the window between
-	// us setting inShutdown above and waiting here.
-	srv.mu.Unlock()
-	srv.listenerGroup.Wait()
-	srv.mu.Lock()
-
 	for c := range srv.activeConn {
 		c.rwc.Close()
 		delete(srv.activeConn, c)
@@ -2788,7 +2752,6 @@ func (srv *Server) Shutdown(ctx context.Context) error {
 		go f()
 	}
 	srv.mu.Unlock()
-	srv.listenerGroup.Wait()
 
 	pollIntervalBase := time.Millisecond
 	nextPollInterval := func() time.Duration {
@@ -2805,7 +2768,7 @@ func (srv *Server) Shutdown(ctx context.Context) error {
 	timer := time.NewTimer(nextPollInterval())
 	defer timer.Stop()
 	for {
-		if srv.closeIdleConns() {
+		if srv.closeIdleConns() && srv.numListeners() == 0 {
 			return lnerr
 		}
 		select {
@@ -2826,6 +2789,12 @@ func (srv *Server) RegisterOnShutdown(f func()) {
 	srv.mu.Lock()
 	srv.onShutdown = append(srv.onShutdown, f)
 	srv.mu.Unlock()
+}
+
+func (s *Server) numListeners() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.listeners)
 }
 
 // closeIdleConns closes all idle connections and reports whether the
@@ -3162,10 +3131,8 @@ func (s *Server) trackListener(ln *net.Listener, add bool) bool {
 			return false
 		}
 		s.listeners[ln] = struct{}{}
-		s.listenerGroup.Add(1)
 	} else {
 		delete(s.listeners, ln)
-		s.listenerGroup.Done()
 	}
 	return true
 }
