@@ -223,14 +223,14 @@ minor changes (e.g., updating docs) directly on the `main` branch.
 
 ```bash
 set -ex
-git checkout main
+git checkout dev
 git remote add golang git@github.com:golang/go.git || git fetch golang
-git branch -D golang-upstream golang-http-upstream merged-main || true
+git branch -D golang-upstream golang-http-upstream merged-dev || true
 git fetch golang
-git checkout -b golang-upstream go1.18.3
+git checkout -b golang-upstream go1.19.4
 git subtree split -P src/net/http/ -b golang-http-upstream
-git checkout main
-git checkout -b merged-main
+git checkout dev
+git checkout -b merged-dev
 git merge golang-http-upstream
 ```
 
