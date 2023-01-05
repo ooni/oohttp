@@ -47,7 +47,7 @@ import (
 )
 
 // TODO: test 5 pipelined requests with responses: 1) OK, 2) OK, Connection: Close
-//       and then verify that the final 2 responses get errors back.
+// and then verify that the final 2 responses get errors back.
 
 // hostPortHandler writes back the client's "host:port".
 var hostPortHandler = HandlerFunc(func(w ResponseWriter, r *Request) {
@@ -56,6 +56,12 @@ var hostPortHandler = HandlerFunc(func(w ResponseWriter, r *Request) {
 	}
 	w.Header().Set("X-Saw-Close", fmt.Sprint(r.Close))
 	w.Write([]byte(r.RemoteAddr))
+
+	// Include the address of the net.Conn in addition to the RemoteAddr,
+	// in case kernels reuse source ports quickly (see Issue 52450)
+	if c, ok := ResponseWriterConnForTesting(w); ok {
+		fmt.Fprintf(w, ", %T %p", c, c)
+	}
 })
 
 // testCloseConn is a net.Conn tracked by a testConnSet.
@@ -239,6 +245,12 @@ func TestTransportConnectionCloseOnResponse(t *testing.T) {
 	connSet.check(t)
 }
 
+// TestTransportConnectionCloseOnRequest tests that the Transport's doesn't reuse
+// an underlying TCP connection after making an http.Request with Request.Close set.
+//
+// It tests the behavior by making an HTTP request to a server which
+// describes the source source connection it got (remote port number +
+// address of its net.Conn).
 func TestTransportConnectionCloseOnRequest(t *testing.T) {
 	defer afterTest(t)
 	ts := httptest.NewServer(hostPortHandler)
@@ -249,7 +261,7 @@ func TestTransportConnectionCloseOnRequest(t *testing.T) {
 	c := ts.Client()
 	tr := c.Transport.(*Transport)
 	tr.Dial = testDial
-	for _, connectionClose := range []bool{false, true} {
+	for _, reqClose := range []bool{false, true} {
 		fetch := func(n int) string {
 			req := new(Request)
 			var err error
@@ -261,29 +273,37 @@ func TestTransportConnectionCloseOnRequest(t *testing.T) {
 			req.Proto = "HTTP/1.1"
 			req.ProtoMajor = 1
 			req.ProtoMinor = 1
-			req.Close = connectionClose
+			req.Close = reqClose
 
 			res, err := c.Do(req)
 			if err != nil {
-				t.Fatalf("error in connectionClose=%v, req #%d, Do: %v", connectionClose, n, err)
+				t.Fatalf("error in Request.Close=%v, req #%d, Do: %v", reqClose, n, err)
 			}
-			if got, want := res.Header.Get("X-Saw-Close"), fmt.Sprint(connectionClose); got != want {
-				t.Errorf("For connectionClose = %v; handler's X-Saw-Close was %v; want %v",
-					connectionClose, got, !connectionClose)
+			if got, want := res.Header.Get("X-Saw-Close"), fmt.Sprint(reqClose); got != want {
+				t.Errorf("for Request.Close = %v; handler's X-Saw-Close was %v; want %v",
+					reqClose, got, !reqClose)
 			}
 			body, err := io.ReadAll(res.Body)
 			if err != nil {
-				t.Fatalf("error in connectionClose=%v, req #%d, ReadAll: %v", connectionClose, n, err)
+				t.Fatalf("for Request.Close=%v, on request %v/2: ReadAll: %v", reqClose, n, err)
 			}
 			return string(body)
 		}
 
 		body1 := fetch(1)
 		body2 := fetch(2)
-		bodiesDiffer := body1 != body2
-		if bodiesDiffer != connectionClose {
-			t.Errorf("error in connectionClose=%v. unexpected bodiesDiffer=%v; body1=%q; body2=%q",
-				connectionClose, bodiesDiffer, body1, body2)
+
+		got := 1
+		if body1 != body2 {
+			got++
+		}
+		want := 1
+		if reqClose {
+			want = 2
+		}
+		if got != want {
+			t.Errorf("for Request.Close=%v: server saw %v unique connections, wanted %v\n\nbodies were: %q and %q",
+				reqClose, got, want, body1, body2)
 		}
 
 		tr.CloseIdleConnections()
@@ -2098,17 +2118,21 @@ func TestTransportConcurrency(t *testing.T) {
 			for req := range reqs {
 				res, err := c.Get(ts.URL + "/?echo=" + req)
 				if err != nil {
-					t.Errorf("error on req %s: %v", req, err)
+					if runtime.GOOS == "netbsd" && strings.HasSuffix(err.Error(), ": connection reset by peer") {
+						// https://go.dev/issue/52168: this test was observed to fail with
+						// ECONNRESET errors in Dial on various netbsd builders.
+						t.Logf("error on req %s: %v", req, err)
+						t.Logf("(see https://go.dev/issue/52168)")
+					} else {
+						t.Errorf("error on req %s: %v", req, err)
+					}
 					wg.Done()
 					continue
 				}
 				all, err := io.ReadAll(res.Body)
 				if err != nil {
 					t.Errorf("read error on req %s: %v", req, err)
-					wg.Done()
-					continue
-				}
-				if string(all) != req {
+				} else if string(all) != req {
 					t.Errorf("body of req %s = %q; want %q", req, all, req)
 				}
 				res.Body.Close()
@@ -3434,6 +3458,7 @@ func (c writerFuncConn) Write(p []byte) (n int, err error) { return c.write(p) }
 //   - we reused a keep-alive connection
 //   - we haven't yet received any header data
 //   - either we wrote no bytes to the server, or the request is idempotent
+//
 // This automatically prevents an infinite resend loop because we'll run out of
 // the cached keep-alive connections eventually.
 func TestRetryRequestsOnError(t *testing.T) {
@@ -5698,14 +5723,14 @@ func TestTransportClosesBodyOnInvalidRequests(t *testing.T) {
 				Method: " ",
 				URL:    u,
 			},
-			wantErr: "invalid method",
+			wantErr: `invalid method " "`,
 		},
 		{
 			name: "nil URL",
 			req: &Request{
 				Method: "GET",
 			},
-			wantErr: "nil Request.URL",
+			wantErr: `nil Request.URL`,
 		},
 		{
 			name: "invalid header key",
@@ -5714,7 +5739,7 @@ func TestTransportClosesBodyOnInvalidRequests(t *testing.T) {
 				Header: Header{"💡": {"emoji"}},
 				URL:    u,
 			},
-			wantErr: "invalid header field name",
+			wantErr: `invalid header field name "💡"`,
 		},
 		{
 			name: "invalid header value",
@@ -5723,7 +5748,7 @@ func TestTransportClosesBodyOnInvalidRequests(t *testing.T) {
 				Header: Header{"key": {"\x19"}},
 				URL:    u,
 			},
-			wantErr: "invalid header field value",
+			wantErr: `invalid header field value for "key"`,
 		},
 		{
 			name: "non HTTP(s) scheme",
@@ -5731,7 +5756,7 @@ func TestTransportClosesBodyOnInvalidRequests(t *testing.T) {
 				Method: "POST",
 				URL:    &url.URL{Scheme: "faux"},
 			},
-			wantErr: "unsupported protocol scheme",
+			wantErr: `unsupported protocol scheme "faux"`,
 		},
 		{
 			name: "no Host in URL",
@@ -5739,7 +5764,7 @@ func TestTransportClosesBodyOnInvalidRequests(t *testing.T) {
 				Method: "POST",
 				URL:    &url.URL{Scheme: "http"},
 			},
-			wantErr: "no Host",
+			wantErr: `no Host in request URL`,
 		},
 	}
 
@@ -5755,8 +5780,8 @@ func TestTransportClosesBodyOnInvalidRequests(t *testing.T) {
 			if !bc {
 				t.Fatal("Expected body to have been closed")
 			}
-			if g, w := err.Error(), tt.wantErr; !strings.Contains(g, w) {
-				t.Fatalf("Error mismatch\n\t%q\ndoes not contain\n\t%q", g, w)
+			if g, w := err.Error(), tt.wantErr; !strings.HasSuffix(g, w) {
+				t.Fatalf("Error mismatch: %q does not end with %q", g, w)
 			}
 		})
 	}
@@ -6143,7 +6168,7 @@ func TestCancelRequestWhenSharingConnection(t *testing.T) {
 	r2c := <-reqc
 	cancel()
 
-	// Give the cancelation a moment to take effect, and then unblock the first request.
+	// Give the cancellation a moment to take effect, and then unblock the first request.
 	time.Sleep(1 * time.Millisecond)
 	close(idlec)
 

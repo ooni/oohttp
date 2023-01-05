@@ -103,6 +103,9 @@ type TLSConn interface {
 	// HandshakeContext performs an TLS handshake bounded
 	// in time by the given context.
 	HandshakeContext(ctx context.Context) error
+
+	// NetConn returns the underlying net.Conn
+	NetConn() net.Conn
 }
 ```
 
@@ -219,20 +222,8 @@ minor changes (e.g., updating docs) directly on the `main` branch.
 
 (Adapted from refraction-networking/utls instructions.)
 
-- [ ] run the following commands:
-
-```bash
-set -ex
-git checkout main
-git remote add golang git@github.com:golang/go.git || git fetch golang
-git branch -D golang-upstream golang-http-upstream merged-main || true
-git fetch golang
-git checkout -b golang-upstream go1.18.9
-git subtree split -P src/net/http/ -b golang-http-upstream
-git checkout main
-git checkout -b merged-main
-git merge golang-http-upstream
-```
+- [ ] update [UPSTREAM](UPSTREAM), commit the change, and then
+run the `./tools/merge.bash` script to merge from upstream;
 
 - [ ] make sure you synch [./internal/safefilepath](./internal/safefilepath) with the
 `./src/internal/safefilepath` of the Go release you're merging from;
