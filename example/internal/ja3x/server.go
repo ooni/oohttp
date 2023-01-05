@@ -17,15 +17,16 @@ import (
 	"time"
 
 	"github.com/google/martian/v3/mitm"
+	"github.com/ooni/oohttp/example/internal/runtimex"
 	"golang.org/x/net/http2"
 )
 
 // serverTLSConfigMITM creates a MITM TLS configuration.
 func serverTLSConfigMITM() (*x509.Certificate, *rsa.PrivateKey, *mitm.Config) {
 	cert, privkey, err := mitm.NewAuthority("ja3x", "OONI", time.Hour)
-	panicOnError(err)
+	runtimex.PanicOnError(err, "mitm.NewAuthority failed")
 	config, err := mitm.NewConfig(cert, privkey)
-	panicOnError(err)
+	runtimex.PanicOnError(err, "mitm.NewConfig failed")
 	return cert, privkey, config
 }
 
@@ -40,7 +41,7 @@ func serverConfigALPN(alpn []string) []string {
 // NewServer creates a new [Server] instance.
 func NewServer(alpn ...string) *Server {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	panicOnError(err)
+	runtimex.PanicOnError(err, "net.Listen failed")
 	cert, privkey, config := serverTLSConfigMITM()
 	ctx, cancel := context.WithCancel(context.Background())
 	endpoint := listener.Addr().String()
@@ -81,6 +82,11 @@ type Server struct {
 	listener net.Listener
 	once     sync.Once
 	privkey  *rsa.PrivateKey
+}
+
+// Endpoint returns the server's TCP endpoint.
+func (p *Server) Endpoint() string {
+	return p.endpoint
 }
 
 // CertPool returns the internal CA as a cert pool.

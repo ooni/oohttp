@@ -17,12 +17,7 @@ func TestServerWithSpecificALPN(t *testing.T) {
 	defer srvr.Close()
 	tlsConfig := srvr.ClientConfig()
 	tlsConfig.NextProtos = []string{"antani"}
-	parsed, err := url.Parse(srvr.URL())
-	if err != nil {
-		t.Fatal(err)
-	}
-	endpoint := parsed.Host // guaranteed to always contain an explicit port
-	conn, err := tls.Dial("tcp", endpoint, tlsConfig)
+	conn, err := tls.Dial("tcp", srvr.Endpoint(), tlsConfig)
 	if err != nil {
 		t.Fatal(err)
 	}

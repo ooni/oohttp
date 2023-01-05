@@ -12,7 +12,8 @@ import (
 	"testing"
 
 	oohttp "github.com/ooni/oohttp"
-	"github.com/ooni/oohttp/example/example-utls-with-dial/internal/ja3x"
+	"github.com/ooni/oohttp/example/internal/ja3x"
+	"github.com/ooni/oohttp/example/internal/utlsx"
 )
 
 // tlsDialerRecorder performs TLS dials and records the ALPN.
@@ -24,10 +25,10 @@ type tlsDialerRecorder struct {
 
 // do is like dialTLSContext but also records the ALPN.
 func (d *tlsDialerRecorder) do(ctx context.Context, network string, addr string) (net.Conn, error) {
-	child := &tlsDialer{
-		config: d.config,
+	child := &utlsx.TLSDialer{
+		Config: d.config,
 	}
-	conn, err := child.dial(ctx, network, addr)
+	conn, err := child.DialTLSContext(ctx, network, addr)
 	if err != nil {
 		return nil, err
 	}

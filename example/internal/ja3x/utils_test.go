@@ -3,6 +3,8 @@ package ja3x
 import (
 	"errors"
 	"testing"
+
+	"github.com/ooni/oohttp/example/internal/runtimex"
 )
 
 func Test_panicOnError(t *testing.T) {
@@ -13,7 +15,7 @@ func Test_panicOnError(t *testing.T) {
 			defer func() {
 				errch <- recover().(error)
 			}()
-			panicOnError(expected)
+			runtimex.PanicOnError(expected, "a")
 		}()
 		err := <-errch
 		if !errors.Is(err, expected) {

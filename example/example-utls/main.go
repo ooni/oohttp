@@ -10,7 +10,17 @@ import (
 	"net/http"
 
 	oohttp "github.com/ooni/oohttp"
+	"github.com/ooni/oohttp/example/internal/utlsx"
 )
+
+// newTransport returns a new http.Transport using the provided tls dialer.
+func newTransport(f func(conn net.Conn, config *tls.Config) oohttp.TLSConn) http.RoundTripper {
+	return utlsx.NewOOHTTPTransport(
+		oohttp.ProxyFromEnvironment,
+		f,
+		nil, // we're using f to wrap dialed connections
+	)
+}
 
 // newClient creates a new http.Client using the given transport.
 func newClient(txp http.RoundTripper) *http.Client {
@@ -26,7 +36,7 @@ func main() {
 	flag.Parse()
 	var ffun func(conn net.Conn, config *tls.Config) oohttp.TLSConn
 	if *utls {
-		ffun = utlsFactory
+		ffun = (&utlsx.FactoryWithParrot{}).NewUTLSConn
 	}
 	resp, err := newClient(newTransport(ffun)).Get(*url)
 	if err != nil {
