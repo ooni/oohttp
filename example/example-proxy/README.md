@@ -6,8 +6,6 @@ library to use `refraction-networking/utls` for proxied conns.
 * [main.go](main.go) sets up an `oohttp.Transport` instance, uses the `Proxy` field
 to configure a SOCKS5 proxy, and the `TLSClientFactory` to use uTLS when needed;
 
-* [utls.go](utls.go) contains the code to create an uTLS conn.
-
 You should not change the `Transport.TLSClientFactory` while the transport
 is being used. Doing that is likely to cause data races.
 
