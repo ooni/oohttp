@@ -128,7 +128,8 @@ func TestServerWithEmptyALPN(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp, err := txp.RoundTrip(req)
-	if !errors.Is(err, io.EOF) {
+	// the former error happens on macOS and the latter in github actions
+	if !errors.Is(err, io.EOF) && !(err != nil && err.Error() == "http: server closed idle connection") {
 		t.Fatal("unexpected error", err)
 	}
 	if resp != nil {
