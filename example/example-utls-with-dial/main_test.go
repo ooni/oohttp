@@ -2,24 +2,33 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"io"
 	"log"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
 
 	oohttp "github.com/ooni/oohttp"
+	"github.com/ooni/oohttp/example/internal/ja3x"
+	"github.com/ooni/oohttp/example/internal/utlsx"
 )
 
 // tlsDialerRecorder performs TLS dials and records the ALPN.
 type tlsDialerRecorder struct {
-	alpn map[string]int
-	mu   sync.Mutex
+	alpn   map[string]int
+	config *tls.Config
+	mu     sync.Mutex
 }
 
 // do is like dialTLSContext but also records the ALPN.
 func (d *tlsDialerRecorder) do(ctx context.Context, network string, addr string) (net.Conn, error) {
-	conn, err := dialTLSContext(ctx, network, addr)
+	child := &utlsx.TLSDialer{
+		Config: d.config,
+	}
+	conn, err := child.DialTLSContext(ctx, network, addr)
 	if err != nil {
 		return nil, err
 	}
@@ -35,9 +44,15 @@ func (d *tlsDialerRecorder) do(ctx context.Context, network string, addr string)
 }
 
 func TestWorkAsIntendedWithH2(t *testing.T) {
-	d := &tlsDialerRecorder{}
+	srvr := ja3x.NewServer("h2")
+	defer srvr.Close()
+	d := &tlsDialerRecorder{
+		alpn:   map[string]int{},
+		config: srvr.ClientConfig(),
+		mu:     sync.Mutex{},
+	}
 	clnt := newClient(newTransport(d.do))
-	resp, err := clnt.Get("https://www.facebook.com")
+	resp, err := clnt.Get(srvr.URL())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -53,9 +68,15 @@ func TestWorkAsIntendedWithH2(t *testing.T) {
 }
 
 func TestWorkAsIntendedWithHTTP11(t *testing.T) {
-	d := &tlsDialerRecorder{}
+	srvr := ja3x.NewServer("http/1.1")
+	defer srvr.Close()
+	d := &tlsDialerRecorder{
+		alpn:   map[string]int{},
+		config: srvr.ClientConfig(),
+		mu:     sync.Mutex{},
+	}
 	clnt := newClient(newTransport(d.do))
-	resp, err := clnt.Get("https://nexa.polito.it")
+	resp, err := clnt.Get(srvr.URL())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -71,7 +92,11 @@ func TestWorkAsIntendedWithHTTP11(t *testing.T) {
 }
 
 func TestWorkAsIntendedWithHTTP(t *testing.T) {
-	resp, err := defaultClient.Get("http://example.com")
+	srvr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("0xdeadbeef"))
+	}))
+	defer srvr.Close()
+	resp, err := defaultClient.Get(srvr.URL)
 	if err != nil {
 		log.Fatal(err)
 	}
