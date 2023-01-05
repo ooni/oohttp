@@ -1,9 +1,5 @@
 package ja3x
 
-//
-// Server-side wrapping of the client hello.
-//
-
 import (
 	"net"
 	"sync"

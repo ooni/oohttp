@@ -1,28 +1,6 @@
 package ja3x
 
-import (
-	"errors"
-	"testing"
-
-	"github.com/ooni/oohttp/example/internal/runtimex"
-)
-
-func Test_panicOnError(t *testing.T) {
-	t.Run("calls panic on error", func(t *testing.T) {
-		expected := errors.New("mocked error")
-		errch := make(chan error)
-		go func() {
-			defer func() {
-				errch <- recover().(error)
-			}()
-			runtimex.PanicOnError(expected, "a")
-		}()
-		err := <-errch
-		if !errors.Is(err, expected) {
-			t.Fatal("unexpected error", err)
-		}
-	})
-}
+import "testing"
 
 func Test_clientHelloDigest(t *testing.T) {
 	t.Run("unmarshal fails for invalid ClientHello", func(t *testing.T) {
