@@ -103,6 +103,9 @@ type TLSConn interface {
 	// HandshakeContext performs an TLS handshake bounded
 	// in time by the given context.
 	HandshakeContext(ctx context.Context) error
+
+	// NetConn returns the underlying net.Conn
+	NetConn() net.Conn
 }
 ```
 
