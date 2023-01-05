@@ -2988,6 +2988,13 @@ func testRequestBodyLimit(t *testing.T, h2 bool) {
 		if n != limit {
 			t.Errorf("io.Copy = %d, want %d", n, limit)
 		}
+		mbErr, ok := err.(*MaxBytesError)
+		if !ok {
+			t.Errorf("expected MaxBytesError, got %T", err)
+		}
+		if mbErr.Limit != limit {
+			t.Errorf("MaxBytesError.Limit = %d, want %d", mbErr.Limit, limit)
+		}
 	}))
 	defer cst.close()
 
@@ -3819,7 +3826,7 @@ func testServerReaderFromOrder(t *testing.T, h2 bool) {
 
 // Issue 6157, Issue 6685
 func TestCodesPreventingContentTypeAndBody(t *testing.T) {
-	for _, code := range []int{StatusNotModified, StatusNoContent, StatusContinue} {
+	for _, code := range []int{StatusNotModified, StatusNoContent} {
 		ht := newHandlerTest(HandlerFunc(func(w ResponseWriter, r *Request) {
 			if r.URL.Path == "/header" {
 				w.Header().Set("Content-Length", "123")
@@ -4830,11 +4837,7 @@ func TestServerRequestContextCancel_ConnClose(t *testing.T) {
 	handlerDone := make(chan struct{})
 	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
 		close(inHandler)
-		select {
-		case <-r.Context().Done():
-		case <-time.After(3 * time.Second):
-			t.Errorf("timeout waiting for context to be done")
-		}
+		<-r.Context().Done()
 		close(handlerDone)
 	}))
 	defer ts.Close()
@@ -4844,18 +4847,9 @@ func TestServerRequestContextCancel_ConnClose(t *testing.T) {
 	}
 	defer c.Close()
 	io.WriteString(c, "GET / HTTP/1.1\r\nHost: foo\r\n\r\n")
-	select {
-	case <-inHandler:
-	case <-time.After(3 * time.Second):
-		t.Fatalf("timeout waiting to see ServeHTTP get called")
-	}
+	<-inHandler
 	c.Close() // this should trigger the context being done
-
-	select {
-	case <-handlerDone:
-	case <-time.After(4 * time.Second):
-		t.Fatalf("timeout waiting to see ServeHTTP exit")
-	}
+	<-handlerDone
 }
 
 func TestServerContext_ServerContextKey_h1(t *testing.T) {
@@ -5030,10 +5024,11 @@ func benchmarkClientServerParallel(b *testing.B, parallelism int, useTLS bool) {
 // The client code runs in a subprocess.
 //
 // For use like:
-//   $ go test -c
-//   $ ./http.test -test.run=XX -test.bench=BenchmarkServer -test.benchtime=15s -test.cpuprofile=http.prof
-//   $ go tool pprof http.test http.prof
-//   (pprof) web
+//
+//	$ go test -c
+//	$ ./http.test -test.run=XX -test.bench=BenchmarkServer -test.benchtime=15s -test.cpuprofile=http.prof
+//	$ go tool pprof http.test http.prof
+//	(pprof) web
 func BenchmarkServer(b *testing.B) {
 	b.ReportAllocs()
 	// Child process mode;
@@ -6620,5 +6615,37 @@ func testMaxBytesHandler(t *testing.T, maxSize, requestSize int64) {
 	}
 	if buf.Len() != int(handlerN) {
 		t.Errorf("expected echo of size %d; got %d", handlerN, buf.Len())
+	}
+}
+
+func TestEarlyHints(t *testing.T) {
+	ht := newHandlerTest(HandlerFunc(func(w ResponseWriter, r *Request) {
+		h := w.Header()
+		h.Add("Link", "</style.css>; rel=preload; as=style")
+		h.Add("Link", "</script.js>; rel=preload; as=script")
+		w.WriteHeader(StatusEarlyHints)
+
+		h.Add("Link", "</foo.js>; rel=preload; as=script")
+		w.WriteHeader(StatusEarlyHints)
+
+		w.Write([]byte("stuff"))
+	}))
+
+	got := ht.rawResponse("GET / HTTP/1.1\nHost: golang.org")
+	expected := "HTTP/1.1 103 Early Hints\r\nLink: </style.css>; rel=preload; as=style\r\nLink: </script.js>; rel=preload; as=script\r\n\r\nHTTP/1.1 103 Early Hints\r\nLink: </style.css>; rel=preload; as=style\r\nLink: </script.js>; rel=preload; as=script\r\nLink: </foo.js>; rel=preload; as=script\r\n\r\nHTTP/1.1 200 OK\r\nLink: </style.css>; rel=preload; as=style\r\nLink: </script.js>; rel=preload; as=script\r\nLink: </foo.js>; rel=preload; as=script\r\nDate: " // dynamic content expected
+	if !strings.Contains(got, expected) {
+		t.Errorf("unexpected response; got %q; should start by %q", got, expected)
+	}
+}
+func TestProcessing(t *testing.T) {
+	ht := newHandlerTest(HandlerFunc(func(w ResponseWriter, r *Request) {
+		w.WriteHeader(StatusProcessing)
+		w.Write([]byte("stuff"))
+	}))
+
+	got := ht.rawResponse("GET / HTTP/1.1\nHost: golang.org")
+	expected := "HTTP/1.1 102 Processing\r\n\r\nHTTP/1.1 200 OK\r\nDate: " // dynamic content expected
+	if !strings.Contains(got, expected) {
+		t.Errorf("unexpected response; got %q; should start by %q", got, expected)
 	}
 }
