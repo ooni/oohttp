@@ -218,18 +218,7 @@ func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	ctx := req.Context()
-	if ctx.Done() != nil {
-		// CloseNotifier predates context.Context, and has been
-		// entirely superseded by it. If the request contains
-		// a Context that carries a cancellation signal, don't
-		// bother spinning up a goroutine to watch the CloseNotify
-		// channel (if any).
-		//
-		// If the request Context has a nil Done channel (which
-		// means it is either context.Background, or a custom
-		// Context implementation with no cancellation signal),
-		// then consult the CloseNotifier if available.
-	} else if cn, ok := rw.(http.CloseNotifier); ok {
+	if cn, ok := rw.(http.CloseNotifier); ok {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithCancel(ctx)
 		defer cancel()
@@ -261,6 +250,9 @@ func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	p.Director(outreq)
+	if outreq.Form != nil {
+		outreq.URL.RawQuery = cleanQueryParams(outreq.URL.RawQuery)
+	}
 	outreq.Close = false
 
 	reqUpType := upgradeType(outreq.Header)
@@ -622,6 +614,7 @@ func (p *ReverseProxy) handleUpgradeResponse(rw http.ResponseWriter, req *http.R
 	go spc.copyToBackend(errc)
 	go spc.copyFromBackend(errc)
 	<-errc
+	return
 }
 
 // switchProtocolCopier exists so goroutines proxying data back and
@@ -638,4 +631,37 @@ func (c switchProtocolCopier) copyFromBackend(errc chan<- error) {
 func (c switchProtocolCopier) copyToBackend(errc chan<- error) {
 	_, err := io.Copy(c.backend, c.user)
 	errc <- err
+}
+
+func cleanQueryParams(s string) string {
+	reencode := func(s string) string {
+		v, _ := url.ParseQuery(s)
+		return v.Encode()
+	}
+	for i := 0; i < len(s); {
+		switch s[i] {
+		case ';':
+			return reencode(s)
+		case '%':
+			if i+2 >= len(s) || !ishex(s[i+1]) || !ishex(s[i+2]) {
+				return reencode(s)
+			}
+			i += 3
+		default:
+			i++
+		}
+	}
+	return s
+}
+
+func ishex(c byte) bool {
+	switch {
+	case '0' <= c && c <= '9':
+		return true
+	case 'a' <= c && c <= 'f':
+		return true
+	case 'A' <= c && c <= 'F':
+		return true
+	}
+	return false
 }

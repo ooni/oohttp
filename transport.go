@@ -162,7 +162,7 @@ type Transport struct {
 	DialTLS func(network, addr string) (net.Conn, error)
 
 	// TLSClientConfig specifies the TLS configuration to use with
-	// TLSClientFactory.
+	// tls.Client.
 	// If nil, the default configuration is used.
 	// If non-nil, HTTP/2 support may not be enabled by default.
 	TLSClientConfig *tls.Config
@@ -529,8 +529,7 @@ func (t *Transport) roundTrip(req *Request) (*Response, error) {
 			for _, v := range vv {
 				if !httpguts.ValidHeaderFieldValue(v) {
 					req.closeBody()
-					// Don't include the value in the error, because it may be sensitive.
-					return nil, fmt.Errorf("net/http: invalid header field value for %q", k)
+					return nil, fmt.Errorf("net/http: invalid header field value %q for key %v", v, k)
 				}
 			}
 		}
@@ -1800,6 +1799,7 @@ var _ io.ReaderFrom = (*persistConnWriter)(nil)
 //	socks5://proxy.com|https|foo.com  socks5 to proxy, then https to foo.com
 //	https://proxy.com|https|foo.com   https to proxy, then CONNECT to foo.com
 //	https://proxy.com|http            https to proxy, http to anywhere after that
+//
 type connectMethod struct {
 	_            incomparable
 	proxyURL     *url.URL // nil for no proxy, else full proxy URL
