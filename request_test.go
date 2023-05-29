@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	. "github.com/ooni/oohttp"
-	"github.com/ooni/oohttp/httptest"
 )
 
 func TestQuery(t *testing.T) {
@@ -290,10 +289,11 @@ Content-Type: text/plain
 // the payload size and the internal leeway buffer size of 10MiB overflows, that we
 // correctly return an error.
 func TestMaxInt64ForMultipartFormMaxMemoryOverflow(t *testing.T) {
-	defer afterTest(t)
-
+	run(t, testMaxInt64ForMultipartFormMaxMemoryOverflow)
+}
+func testMaxInt64ForMultipartFormMaxMemoryOverflow(t *testing.T, mode testMode) {
 	payloadSize := 1 << 10
-	cst := httptest.NewServer(HandlerFunc(func(rw ResponseWriter, req *Request) {
+	cst := newClientServerTest(t, mode, HandlerFunc(func(rw ResponseWriter, req *Request) {
 		// The combination of:
 		//      MaxInt64 + payloadSize + (internal spare of 10MiB)
 		// triggers the overflow. See issue https://golang.org/issue/40430/
@@ -301,8 +301,7 @@ func TestMaxInt64ForMultipartFormMaxMemoryOverflow(t *testing.T) {
 			Error(rw, err.Error(), StatusBadRequest)
 			return
 		}
-	}))
-	defer cst.Close()
+	})).ts
 	fBuf := new(bytes.Buffer)
 	mw := multipart.NewWriter(fBuf)
 	mf, err := mw.CreateFormFile("file", "myfile.txt")
@@ -330,11 +329,9 @@ func TestMaxInt64ForMultipartFormMaxMemoryOverflow(t *testing.T) {
 	}
 }
 
-func TestRedirect_h1(t *testing.T) { testRedirect(t, h1Mode) }
-func TestRedirect_h2(t *testing.T) { testRedirect(t, h2Mode) }
-func testRedirect(t *testing.T, h2 bool) {
-	defer afterTest(t)
-	cst := newClientServerTest(t, h2, HandlerFunc(func(w ResponseWriter, r *Request) {
+func TestRequestRedirect(t *testing.T) { run(t, testRequestRedirect) }
+func testRequestRedirect(t *testing.T, mode testMode) {
+	cst := newClientServerTest(t, mode, HandlerFunc(func(w ResponseWriter, r *Request) {
 		switch r.URL.Path {
 		case "/":
 			w.Header().Set("Location", "/foo/")
@@ -345,7 +342,6 @@ func testRedirect(t *testing.T, h2 bool) {
 			w.WriteHeader(StatusBadRequest)
 		}
 	}))
-	defer cst.close()
 
 	var end = regexp.MustCompile("/foo/$")
 	r, err := cst.c.Get(cst.ts.URL)
@@ -812,7 +808,7 @@ func TestStarRequest(t *testing.T) {
 	clientReq := *req
 	clientReq.Body = nil
 
-	var out bytes.Buffer
+	var out strings.Builder
 	if err := clientReq.Write(&out); err != nil {
 		t.Fatal(err)
 	}
@@ -820,7 +816,7 @@ func TestStarRequest(t *testing.T) {
 	if strings.Contains(out.String(), "chunked") {
 		t.Error("wrote chunked request; want no body")
 	}
-	back, err := ReadRequest(bufio.NewReader(bytes.NewReader(out.Bytes())))
+	back, err := ReadRequest(bufio.NewReader(strings.NewReader(out.String())))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -832,7 +828,7 @@ func TestStarRequest(t *testing.T) {
 		t.Errorf("Original request doesn't match Request read back.")
 		t.Logf("Original: %#v", req)
 		t.Logf("Original.URL: %#v", req.URL)
-		t.Logf("Wrote: %s", out.Bytes())
+		t.Logf("Wrote: %s", out.String())
 		t.Logf("Read back (doesn't match Original): %#v", back)
 	}
 }
@@ -979,6 +975,12 @@ func TestMaxBytesReaderDifferentLimits(t *testing.T) {
 			wantN:   len(testStr),
 			wantErr: false,
 		},
+		10: { /* Issue 54408 */
+			limit:   int64(1<<63 - 1),
+			lenP:    len(testStr),
+			wantN:   len(testStr),
+			wantErr: false,
+		},
 	}
 	for i, tt := range tests {
 		rc := MaxBytesReader(nil, io.NopCloser(strings.NewReader(testStr)), tt.limit)
@@ -1030,19 +1032,10 @@ func TestRequestCloneTransferEncoding(t *testing.T) {
 	}
 }
 
-func TestNoPanicOnRoundTripWithBasicAuth_h1(t *testing.T) {
-	testNoPanicWithBasicAuth(t, h1Mode)
-}
-
-func TestNoPanicOnRoundTripWithBasicAuth_h2(t *testing.T) {
-	testNoPanicWithBasicAuth(t, h2Mode)
-}
-
 // Issue 34878: verify we don't panic when including basic auth (Go 1.13 regression)
-func testNoPanicWithBasicAuth(t *testing.T, h2 bool) {
-	defer afterTest(t)
-	cst := newClientServerTest(t, h2, HandlerFunc(func(w ResponseWriter, r *Request) {}))
-	defer cst.close()
+func TestNoPanicOnRoundTripWithBasicAuth(t *testing.T) { run(t, testNoPanicWithBasicAuth) }
+func testNoPanicWithBasicAuth(t *testing.T, mode testMode) {
+	cst := newClientServerTest(t, mode, HandlerFunc(func(w ResponseWriter, r *Request) {}))
 
 	u, err := url.Parse(cst.ts.URL)
 	if err != nil {
@@ -1163,7 +1156,7 @@ func testMultipartFile(t *testing.T, req *Request, key, expectFilename, expectCo
 	if fh.Filename != expectFilename {
 		t.Errorf("filename = %q, want %q", fh.Filename, expectFilename)
 	}
-	var b bytes.Buffer
+	var b strings.Builder
 	_, err = io.Copy(&b, f)
 	if err != nil {
 		t.Fatal("copying contents:", err)
@@ -1172,6 +1165,47 @@ func testMultipartFile(t *testing.T, req *Request, key, expectFilename, expectCo
 		t.Errorf("contents = %q, want %q", g, expectContent)
 	}
 	return f
+}
+
+// Issue 53181: verify Request.Cookie return the correct Cookie.
+// Return ErrNoCookie instead of the first cookie when name is "".
+func TestRequestCookie(t *testing.T) {
+	for _, tt := range []struct {
+		name        string
+		value       string
+		expectedErr error
+	}{
+		{
+			name:        "foo",
+			value:       "bar",
+			expectedErr: nil,
+		},
+		{
+			name:        "",
+			expectedErr: ErrNoCookie,
+		},
+	} {
+		req, err := NewRequest("GET", "http://example.com/", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.AddCookie(&Cookie{Name: tt.name, Value: tt.value})
+		c, err := req.Cookie(tt.name)
+		if err != tt.expectedErr {
+			t.Errorf("got %v, want %v", err, tt.expectedErr)
+		}
+
+		// skip if error occurred.
+		if err != nil {
+			continue
+		}
+		if c.Value != tt.value {
+			t.Errorf("got %v, want %v", c.Value, tt.value)
+		}
+		if c.Name != tt.name {
+			t.Errorf("got %s, want %v", tt.name, c.Name)
+		}
+	}
 }
 
 const (
@@ -1282,11 +1316,6 @@ Host: localhost:8080
 `)
 }
 
-const (
-	withTLS = true
-	noTLS   = false
-)
-
 func BenchmarkFileAndServer_1KB(b *testing.B) {
 	benchmarkFileAndServer(b, 1<<10)
 }
@@ -1314,16 +1343,12 @@ func benchmarkFileAndServer(b *testing.B, n int64) {
 		b.Fatalf("Failed to copy %d bytes: %v", n, err)
 	}
 
-	b.Run("NoTLS", func(b *testing.B) {
-		runFileAndServerBenchmarks(b, noTLS, f, n)
-	})
-
-	b.Run("TLS", func(b *testing.B) {
-		runFileAndServerBenchmarks(b, withTLS, f, n)
-	})
+	run(b, func(b *testing.B, mode testMode) {
+		runFileAndServerBenchmarks(b, mode, f, n)
+	}, []testMode{http1Mode, https1Mode, http2Mode})
 }
 
-func runFileAndServerBenchmarks(b *testing.B, tlsOption bool, f *os.File, n int64) {
+func runFileAndServerBenchmarks(b *testing.B, mode testMode, f *os.File, n int64) {
 	handler := HandlerFunc(func(rw ResponseWriter, req *Request) {
 		defer req.Body.Close()
 		nc, err := io.Copy(io.Discard, req.Body)
@@ -1336,14 +1361,8 @@ func runFileAndServerBenchmarks(b *testing.B, tlsOption bool, f *os.File, n int6
 		}
 	})
 
-	var cst *httptest.Server
-	if tlsOption == withTLS {
-		cst = httptest.NewTLSServer(handler)
-	} else {
-		cst = httptest.NewServer(handler)
-	}
+	cst := newClientServerTest(b, mode, handler).ts
 
-	defer cst.Close()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		// Perform some setup.

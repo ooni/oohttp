@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ooni/oohttp/internal/ascii"
@@ -362,7 +363,7 @@ func setRequestCancel(req *Request, rt RoundTripper, deadline time.Time) (stopTi
 	initialReqCancel := req.Cancel // the user's original Request.Cancel, if any
 
 	var cancelCtx func()
-	if oldCtx := req.Context(); timeBeforeContextDeadline(deadline, oldCtx) {
+	if timeBeforeContextDeadline(deadline, oldCtx) {
 		req.ctx, cancelCtx = context.WithDeadline(oldCtx, deadline)
 	}
 
@@ -392,7 +393,7 @@ func setRequestCancel(req *Request, rt RoundTripper, deadline time.Time) (stopTi
 	}
 
 	timer := time.NewTimer(time.Until(deadline))
-	var timedOut atomicBool
+	var timedOut atomic.Bool
 
 	go func() {
 		select {
@@ -400,14 +401,14 @@ func setRequestCancel(req *Request, rt RoundTripper, deadline time.Time) (stopTi
 			doCancel()
 			timer.Stop()
 		case <-timer.C:
-			timedOut.setTrue()
+			timedOut.Store(true)
 			doCancel()
 		case <-stopTimerCh:
 			timer.Stop()
 		}
 	}()
 
-	return stopTimer, timedOut.isSet
+	return stopTimer, timedOut.Load
 }
 
 // See 2 (end of page 4) https://www.ietf.org/rfc/rfc2617.txt
@@ -499,7 +500,7 @@ func (c *Client) checkRedirect(req *Request, via []*Request) error {
 }
 
 // redirectBehavior describes what should happen when the
-// client encounters a 3xx status code from the server
+// client encounters a 3xx status code from the server.
 func redirectBehavior(reqMethod string, resp *Response, ireq *Request) (redirectMethod string, shouldRedirect, includeBody bool) {
 	switch resp.StatusCode {
 	case 301, 302, 303:
