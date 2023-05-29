@@ -7,7 +7,6 @@
 package main
 
 import (
-	"bytes"
 	"expvar"
 	"flag"
 	"fmt"
@@ -16,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/ooni/oohttp"
@@ -50,8 +50,8 @@ func (ctr *Counter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	case "GET":
 		ctr.n++
 	case "POST":
-		buf := new(bytes.Buffer)
-		io.Copy(buf, req.Body)
+		var buf strings.Builder
+		io.Copy(&buf, req.Body)
 		body := buf.String()
 		if n, err := strconv.Atoi(body); err != nil {
 			fmt.Fprintf(w, "bad POST: %v\nbody: [%v]\n", err, body)
@@ -102,7 +102,7 @@ func (ch Chan) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	io.WriteString(w, fmt.Sprintf("channel send #%d\n", <-ch))
 }
 
-// exec a program, redirecting output
+// exec a program, redirecting output.
 func DateServer(rw http.ResponseWriter, req *http.Request) {
 	rw.Header().Set("Content-Type", "text/plain; charset=utf-8")
 
@@ -119,7 +119,7 @@ func Logger(w http.ResponseWriter, req *http.Request) {
 	http.Error(w, "oops", http.StatusNotFound)
 }
 
-var webroot = flag.String("root", os.Getenv("HOME"), "web root directory")
+var webroot = flag.String("root", "", "web root directory")
 
 func main() {
 	flag.Parse()
@@ -129,11 +129,13 @@ func main() {
 	expvar.Publish("counter", ctr)
 	http.Handle("/counter", ctr)
 	http.Handle("/", http.HandlerFunc(Logger))
-	http.Handle("/go/", http.StripPrefix("/go/", http.FileServer(http.Dir(*webroot))))
+	if *webroot != "" {
+		http.Handle("/go/", http.StripPrefix("/go/", http.FileServer(http.Dir(*webroot))))
+	}
 	http.Handle("/chan", ChanCreate())
 	http.HandleFunc("/flags", FlagServer)
 	http.HandleFunc("/args", ArgServer)
 	http.HandleFunc("/go/hello", HelloServer)
 	http.HandleFunc("/date", DateServer)
-	log.Fatal(http.ListenAndServe(":12345", nil))
+	log.Fatal(http.ListenAndServe("localhost:12345", nil))
 }

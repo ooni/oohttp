@@ -9,6 +9,4 @@ test -d $upstreamrepo || git clone git@github.com:golang/go.git $upstreamrepo
 	git pull
 	git checkout $TAG
 )
-for file in $(cd $upstreamrepo/src/net/http && find . -type f -name \*.go); do
-	git diff --no-index $upstreamrepo/src/net/http/$file $file || true
-done
+diff -ur $upstreamrepo/src/net/http .
