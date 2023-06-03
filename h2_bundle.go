@@ -7752,20 +7752,30 @@ func (t *http2Transport) newClientConn(c net.Conn, singleUse bool) (*http2Client
 		cc.tlsState = &state
 	}
 
-	initialSettings := []http2Setting{
-		{ID: http2SettingEnablePush, Val: 0},
-		{ID: http2SettingInitialWindowSize, Val: http2transportDefaultStreamFlow},
-		{ID: http2SettingHeaderTableSize, Val: http2initialHeaderTableSize},
-		{ID: http2SettingMaxConcurrentStreams, Val: cc.maxConcurrentStreams},
-	}
-	if max := t.maxFrameReadSize(); max != 0 {
-		initialSettings = append(initialSettings, http2Setting{ID: http2SettingMaxFrameSize, Val: max})
-	}
-	if max := t.maxHeaderListSize(); max != 0 {
-		initialSettings = append(initialSettings, http2Setting{ID: http2SettingMaxHeaderListSize, Val: max})
-	}
-	if maxHeaderTableSize != http2initialHeaderTableSize {
-		initialSettings = append(initialSettings, http2Setting{ID: http2SettingHeaderTableSize, Val: maxHeaderTableSize})
+	var initialSettings []http2Setting
+	if t.t1.hasCustomInitialSettings {
+		initialSettings = []http2Setting{
+			{ID: http2SettingHeaderTableSize, Val: t.t1.HeaderTableSize},
+			{ID: http2SettingEnablePush, Val: t.t1.EnablePush},
+			{ID: http2SettingMaxConcurrentStreams, Val: t.t1.MaxConcurrentStreams},
+			{ID: http2SettingInitialWindowSize, Val: t.t1.InitialWindowSize},
+			{ID: http2SettingMaxFrameSize, Val: t.t1.MaxFrameSize},
+			{ID: http2SettingMaxHeaderListSize, Val: t.t1.MaxHeaderListSize},
+		}
+	} else {
+		initialSettings = []http2Setting{
+			{ID: http2SettingEnablePush, Val: 0},
+			{ID: http2SettingInitialWindowSize, Val: http2transportDefaultStreamFlow},
+		}
+		if max := t.maxFrameReadSize(); max != 0 {
+			initialSettings = append(initialSettings, http2Setting{ID: http2SettingMaxFrameSize, Val: max})
+		}
+		if max := t.maxHeaderListSize(); max != 0 {
+			initialSettings = append(initialSettings, http2Setting{ID: http2SettingMaxHeaderListSize, Val: max})
+		}
+		if maxHeaderTableSize != http2initialHeaderTableSize {
+			initialSettings = append(initialSettings, http2Setting{ID: http2SettingHeaderTableSize, Val: maxHeaderTableSize})
+		}
 	}
 
 	cc.bw.Write(http2clientPreface)

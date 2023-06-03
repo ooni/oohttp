@@ -292,6 +292,45 @@ type Transport struct {
 	// DialTLSContext function, you'll completely bypass this
 	// per-Transport-or-global TLSClientFactory mechanism.)
 	TLSClientFactory func(conn net.Conn, config *tls.Config) TLSConn
+
+	hasCustomInitialSettings bool
+
+	// MaxHeaderListSize is the http2 SETTINGS_MAX_HEADER_LIST_SIZE to
+	// send in the initial settings frame. It is how many bytes
+	// of response headers are allowed. Unlike the http2 spec, zero here
+	// means to use a default limit (currently 10MB). If you actually
+	// want to advertise an unlimited value to the peer, Transport
+	// interprets the highest possible value here (0xffffffff or 1<<32-1)
+	// to mean no limit.
+	MaxHeaderListSize uint32
+
+	// MaxReadFrameSize is the http2 SETTINGS_MAX_FRAME_SIZE to send in the
+	// initial settings frame. It is the size in bytes of the largest frame
+	// payload that the sender is willing to receive. If 0, no setting is
+	// sent, and the value is provided by the peer, which should be 16384
+	// according to the spec:
+	// https://datatracker.ietf.org/doc/html/rfc7540#section-6.5.2.
+	// Values are bounded in the range 16k to 16M.
+	MaxFrameSize uint32
+
+	// MaxDecoderHeaderTableSize optionally specifies the http2
+	// SETTINGS_HEADER_TABLE_SIZE to send in the initial settings frame. It
+	// informs the remote endpoint of the maximum size of the header compression
+	// table used to decode header blocks, in octets. If zero, the default value
+	// of 4096 is used.
+	HeaderTableSize uint32
+
+	// MaxDecoderHeaderTableSize optionally specifies the http2
+	// SETTINGS_ENABLE_PUSH to send in the initial settings frame.
+	EnablePush uint32
+
+	// MaxDecoderHeaderTableSize optionally specifies the http2
+	// SETTINGS_MAX_CONCURRENT_STREAMS to send in the initial settings frame.
+	MaxConcurrentStreams uint32
+
+	// MaxDecoderHeaderTableSize optionally specifies the http2
+	// SETTINGS_INITIAL_WINDOW_SIZE to send in the initial settings frame.
+	InitialWindowSize uint32
 }
 
 // A cancelKey is the key of the reqCanceler map.
@@ -299,6 +338,10 @@ type Transport struct {
 // not any transient one created by roundTrip.
 type cancelKey struct {
 	req *Request
+}
+
+func (t *Transport) EnableCustomInitialSettings() {
+	t.hasCustomInitialSettings = true
 }
 
 func (t *Transport) writeBufferSize() int {
