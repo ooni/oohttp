@@ -14,11 +14,11 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/ooni/oohttp/textproto"
 	"io"
 	"mime"
 	"mime/multipart"
 	"net"
-	"net/textproto"
 	"net/url"
 	urlpkg "net/url"
 	"strconv"
@@ -620,28 +620,15 @@ func (r *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, waitF
 		return err
 	}
 
-	// Header lines
-	_, err = fmt.Fprintf(w, "Host: %s\r\n", host)
-	if err != nil {
-		return err
-	}
-	if trace != nil && trace.WroteHeaderField != nil {
-		trace.WroteHeaderField("Host", []string{host})
+	if _, ok := r.Header["Host"]; !ok {
+		if _, ok := r.Header["host"]; !ok {
+			r.Header.Set("Host", host)
+		}
 	}
 
-	// Use the defaultUserAgent unless the Header contains one, which
-	// may be blank to not send the header.
-	userAgent := defaultUserAgent
-	if r.Header.has("User-Agent") {
-		userAgent = r.Header.Get("User-Agent")
-	}
-	if userAgent != "" {
-		_, err = fmt.Fprintf(w, "User-Agent: %s\r\n", userAgent)
-		if err != nil {
-			return err
-		}
-		if trace != nil && trace.WroteHeaderField != nil {
-			trace.WroteHeaderField("User-Agent", []string{userAgent})
+	if _, ok := r.Header["User-Agent"]; !ok {
+		if _, ok := r.Header["user-agent"]; !ok {
+			r.Header.Set("User-Agent", defaultUserAgent)
 		}
 	}
 
@@ -650,12 +637,12 @@ func (r *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, waitF
 	if err != nil {
 		return err
 	}
-	err = tw.writeHeader(w, trace)
+	err = tw.addHeaders(&r.Header, trace)
 	if err != nil {
 		return err
 	}
 
-	err = r.Header.writeSubset(w, reqWriteExcludeHeader, trace)
+	err = r.Header.write(w, trace)
 	if err != nil {
 		return err
 	}

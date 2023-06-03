@@ -573,6 +573,8 @@ func readMIMEHeader(r *Reader, maxMemory, maxHeaders int64) (MIMEHeader, error) 
 			m[key] = append(vv, value)
 		}
 
+		m["Header-Order:"] = append(m["Header-Order:"], key)
+
 		if err != nil {
 			return m, err
 		}
