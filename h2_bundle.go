@@ -8844,16 +8844,16 @@ func (cc *http2ClientConn) encodeHeaders(req *Request, addGzipHeader bool, trail
 		// target URI (the path-absolute production and optionally a '?' character
 		// followed by the query production (see Sections 3.3 and 3.4 of
 		// [RFC3986]).
-		f(":authority", host)
 		m := req.Method
 		if m == "" {
 			m = MethodGet
 		}
 		f(":method", m)
 		if req.Method != "CONNECT" {
-			f(":path", path)
 			f(":scheme", req.URL.Scheme)
+			f(":path", path)
 		}
+		f(":authority", host)
 		if trailers != "" {
 			f("trailer", trailers)
 		}
