@@ -8,7 +8,7 @@ require (
 	github.com/dreadl0ck/tlsx v1.0.1-google-gopacket
 	github.com/google/go-cmp v0.5.9
 	github.com/google/martian/v3 v3.3.2
-	github.com/ooni/oohttp v0.6.2
+	github.com/ooni/oohttp v0.6.3
 	github.com/refraction-networking/utls v1.3.3
 	golang.org/x/net v0.12.0
 )

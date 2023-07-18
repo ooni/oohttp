@@ -51,8 +51,8 @@ github.com/google/martian/v3 v3.3.2/go.mod h1:oBOf6HBosgwRXnUGWUB05QECsc6uvmMiJ3
 github.com/google/uuid v1.1.2/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
 github.com/klauspost/compress v1.16.7 h1:2mk3MPGNzKyxErAw8YaohYh69+pa4sIQSC0fPGCFR9I=
 github.com/klauspost/compress v1.16.7/go.mod h1:ntbaceVETuRiXiv4DpjP66DpAtAGkEQskQzEyD//IeE=
-github.com/ooni/oohttp v0.6.2 h1:YLUYFn35TmmmTQAFVi5x3tb4VtOpzJTKrq/D3mjgYAY=
-github.com/ooni/oohttp v0.6.2/go.mod h1:/7fPgmXNkMSXBpLOdARkhyn3vsNAtmZ0C3G5C/KLd6Q=
+github.com/ooni/oohttp v0.6.3 h1:MHydpeAPU/LSDSI/hIFJwZm4afBhd2Yo+rNxxFdeMCY=
+github.com/ooni/oohttp v0.6.3/go.mod h1:Zk8frCRZeVn2x68SI6rc0PvAJrK5unPLczIhCU/STAk=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4/go.mod h1:xMI15A0UPsDsEKsMN9yxemIoYk6Tm2C1GtYGdfGttqA=
 github.com/refraction-networking/utls v1.3.3 h1:f/TBLX7KBciRyFH3bwupp+CE4fzoYKCirhdRcC490sw=
