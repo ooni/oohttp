@@ -1,5 +1,7 @@
 package http
 
+import "net/http"
+
 // StdlibTransport is an adapter for integrating net/http dependend code.
 // It looks like an http.RoundTripper but uses this fork internally.
 type StdlibTransport struct {
@@ -7,7 +9,7 @@ type StdlibTransport struct {
 }
 
 // RoundTrip implements the http.RoundTripper interface.
-func (txp *StdlibTransport) RoundTrip(stdReq *Request) (*Response, error) {
+func (txp *StdlibTransport) RoundTrip(stdReq *http.Request) (*http.Response, error) {
 	req := &Request{
 		Method:           stdReq.Method,
 		URL:              stdReq.URL,
@@ -36,19 +38,19 @@ func (txp *StdlibTransport) RoundTrip(stdReq *Request) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	stdResp := &Response{
+	stdResp := &http.Response{
 		Status:           resp.Status,
 		StatusCode:       resp.StatusCode,
 		Proto:            resp.Proto,
 		ProtoMinor:       resp.ProtoMinor,
 		ProtoMajor:       resp.ProtoMajor,
-		Header:           resp.Header,
+		Header:           http.Header(resp.Header),
 		Body:             resp.Body,
 		ContentLength:    resp.ContentLength,
 		TransferEncoding: resp.TransferEncoding,
 		Close:            resp.Close,
 		Uncompressed:     resp.Uncompressed,
-		Trailer:          resp.Trailer,
+		Trailer:          http.Header(resp.Trailer),
 		Request:          stdReq,
 		TLS:              resp.TLS,
 	}

@@ -18,7 +18,6 @@ import (
 	"io"
 	"mime"
 	"mime/multipart"
-	"net"
 	"net/url"
 	urlpkg "net/url"
 	"strconv"
