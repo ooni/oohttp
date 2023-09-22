@@ -8901,7 +8901,36 @@ func (cc *http2ClientConn) encodeHeaders(req *Request, addGzipHeader bool, trail
 			f("trailer", trailers)
 		}
 
-		var didUA bool
+		if http2shouldSendReqContentLength(req.Method, contentLength) {
+			req.Header.Set("content-length", strconv.FormatInt(contentLength, 10))
+		}
+
+		// Does not include accept-encoding header if its defined in req.Header
+		_, addGzipHeader = req.Header["accept-encoding"]
+		if !addGzipHeader { // presence check
+			req.Header.Set("accept-encoding", "gzip")
+			// we just aded it, set to true
+			addGzipHeader = true
+		} else {
+			// we didnt add it
+			addGzipHeader = false
+		}
+
+		UA, didUA := req.Header["user-agent"]
+		if didUA {
+			switch len(UA) {
+			case 0:
+				// Default to to default UA if none provided
+				req.Header.Set("user-agent", defaultUserAgent)
+			case 1:
+				// Don't do anything for UA provided as expected
+				break
+			default:
+				// Unexpected UA provided, only take first element
+				req.Header.Set("user-agent", UA[0])
+
+			}
+		}
 
 		var kvs []keyValues
 		if headerOrder, ok := req.Header[HeaderOrderKey]; ok {
@@ -8917,9 +8946,8 @@ func (cc *http2ClientConn) encodeHeaders(req *Request, addGzipHeader bool, trail
 
 		for _, kv := range kvs {
 
-			if strings.EqualFold(kv.key, "host") || strings.EqualFold(kv.key, "content-length") {
+			if strings.EqualFold(kv.key, "host") {
 				// Host is :authority, already sent.
-				// Content-Length is automatic, set below.
 				continue
 			} else if strings.EqualFold(kv.key, "connection") || strings.EqualFold(kv.key, "proxy-connection") ||
 				strings.EqualFold(kv.key, "transfer-encoding") || strings.EqualFold(kv.key, "upgrade") ||
@@ -8966,25 +8994,11 @@ func (cc *http2ClientConn) encodeHeaders(req *Request, addGzipHeader bool, trail
 					continue
 				}
 
-			} else if strings.EqualFold(kv.key, "accept-encoding") {
-				addGzipHeader = false
 			}
 
 			for _, v := range kv.values {
 				f(kv.key, v)
 			}
-		}
-
-		if http2shouldSendReqContentLength(req.Method, contentLength) {
-			f("content-length", strconv.FormatInt(contentLength, 10))
-		}
-
-		// Does not include accept-encoding header if its defined in req.Header
-		if addGzipHeader {
-			f("accept-encoding", "gzip")
-		}
-		if !didUA {
-			f("user-agent", http2defaultUserAgent)
 		}
 	}
 
