@@ -185,8 +185,10 @@ func (s *headerSorter) Less(i, j int) bool {
 	if s.order == nil {
 		return s.kvs[i].key < s.kvs[j].key
 	}
-	idxi, iok := s.order[s.kvs[i].key]
-	idxj, jok := s.order[s.kvs[j].key]
+	// idxi, iok := s.order[s.kvs[i].key]
+	// idxj, jok := s.order[s.kvs[j].key]
+	idxi, iok := s.order[strings.ToLower(s.kvs[i].key)]
+	idxj, jok := s.order[strings.ToLower(s.kvs[j].key)]
 	if !iok && !jok {
 		return s.kvs[i].key < s.kvs[j].key
 	} else if !iok && jok {
