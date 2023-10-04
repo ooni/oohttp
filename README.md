@@ -248,7 +248,7 @@ the `Request` and `Response` fields;
 
 - [ ] commit the changes and push `merged-main` to gitub;
 
-- [ ] open a PR and merge it *using a merge commit*;
+- [ ] open a PR using this check-list as part of the PR text and merge it *using a merge commit*;
 
 - [ ] create a new working branch to update the examples;
 
