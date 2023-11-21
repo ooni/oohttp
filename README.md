@@ -234,8 +234,8 @@ patches](#patches) still hold;
 - [ ] make sure the codebase does not assume `*tls.Conn` *anywhere* (`git grep -n '\*tls\.Conn'`)
 and otherwise replace `*tls.Conn` with `TLSConn`;
 
-- [ ] make sure the codebase does not call `tls.Client` *anywhere* (`git grep -n 'tls\.Client'`)
-and otherwise replace `tls.Client` with `TLSClientFactory`;
+- [ ] make sure the codebase does not call `tls.Client` *anywhere* except for `tlsconn.go`
+(`git grep -n 'tls\.Client'`) and otherwise replace `tls.Client` with `TLSClientFactory`;
 
 - [ ] ensure `go build -v ./...` still works;
 
