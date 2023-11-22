@@ -34,6 +34,13 @@ func (txp *StdlibTransport) RoundTrip(stdReq *http.Request) (*http.Response, err
 		Response:         nil, // cannot assign this field
 		ctx:              stdReq.Context(),
 	}
+
+	// http.NoBody is a global var with oohttp.NoBody being its analogue
+	// this guards against undefined content length in case when stdReq.Body == http.NoBody
+	if req.Body == http.NoBody {
+		req.Body = NoBody
+	}
+
 	resp, err := txp.Transport.RoundTrip(req)
 	if err != nil {
 		return nil, err
