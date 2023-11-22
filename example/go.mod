@@ -10,7 +10,7 @@ require (
 	github.com/google/martian/v3 v3.3.2
 	github.com/ooni/oohttp v0.6.4-0.20231004121356-dbb36a679659
 	github.com/refraction-networking/utls v1.5.3
-	golang.org/x/net v0.15.0
+	golang.org/x/net v0.17.0
 )
 
 require (
@@ -20,7 +20,7 @@ require (
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/klauspost/compress v1.17.0 // indirect
 	github.com/quic-go/quic-go v0.39.0 // indirect
-	golang.org/x/crypto v0.13.0 // indirect
-	golang.org/x/sys v0.12.0 // indirect
+	golang.org/x/crypto v0.14.0 // indirect
+	golang.org/x/sys v0.13.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
 )
