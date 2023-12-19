@@ -87,3 +87,29 @@ func TestCompose(t *testing.T) {
 	}
 
 }
+
+func TestClientTraceWithoutComposition(t *testing.T) {
+	unexpectedFlag := false
+	oldTrace := &ClientTrace{
+		GetConn: func(hostPort string) {
+			unexpectedFlag = true
+		},
+	}
+	ctx := context.Background()
+	ctx = WithClientTraceWithoutComposition(ctx, oldTrace)
+	expectedFlag := false
+	newTrace := &ClientTrace{
+		GetConn: func(hostPort string) {
+			expectedFlag = true
+		},
+	}
+	ctx = WithClientTraceWithoutComposition(ctx, newTrace)
+	maybeCompoundTrace := ContextClientTrace(ctx)
+	maybeCompoundTrace.GetConn("1.2.3.4")
+	if unexpectedFlag {
+		t.Fatal("should be false")
+	}
+	if !expectedFlag {
+		t.Fatal("should be true")
+	}
+}
