@@ -1831,7 +1831,6 @@ func (fr *http2Framer) ReadFrame() (http2Frame, error) {
 	}
 	fh, err := http2readFrameHeader(fr.headerBuf[:], fr.r)
 	if err != nil {
-		fmt.Println("http2readFrameHeader")
 		return nil, err
 	}
 	if fh.Length > fr.maxReadSize {
@@ -1844,7 +1843,6 @@ func (fr *http2Framer) ReadFrame() (http2Frame, error) {
 	f, err := http2typeFrameParser(fh.Type)(fr.frameCache, fh, fr.countError, payload)
 	if err != nil {
 		if ce, ok := err.(http2connError); ok {
-			fmt.Println("http2typeFrameParser")
 			return nil, fr.connError(ce.Code, ce.Reason)
 		}
 		return nil, err
@@ -2926,7 +2924,6 @@ func (fr *http2Framer) readMetaFrame(hf *http2HeadersFrame) (*http2MetaHeadersFr
 	mh.http2HeadersFrame.invalidate()
 
 	if err := hdec.Close(); err != nil {
-		fmt.Println("hdec.Close() ", err)
 		return nil, http2ConnectionError(http2ErrCodeCompression)
 	}
 	if invalid != nil {
