@@ -371,7 +371,6 @@ func (t *Transport) Clone() *Transport {
 		TLSClientFactory:         t.TLSClientFactory,
 		HasCustomInitialSettings: t.HasCustomInitialSettings,
 		HasCustomWindowUpdate:    t.HasCustomWindowUpdate,
-		HasHeaderPriority:        t.HasHeaderPriority,
 		WindowUpdateIncrement:    t.WindowUpdateIncrement,
 	}
 	if t.TLSClientConfig != nil {
