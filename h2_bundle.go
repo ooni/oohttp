@@ -1831,6 +1831,7 @@ func (fr *http2Framer) ReadFrame() (http2Frame, error) {
 	}
 	fh, err := http2readFrameHeader(fr.headerBuf[:], fr.r)
 	if err != nil {
+		fmt.Println("http2readFrameHeader")
 		return nil, err
 	}
 	if fh.Length > fr.maxReadSize {
@@ -1843,6 +1844,7 @@ func (fr *http2Framer) ReadFrame() (http2Frame, error) {
 	f, err := http2typeFrameParser(fh.Type)(fr.frameCache, fh, fr.countError, payload)
 	if err != nil {
 		if ce, ok := err.(http2connError); ok {
+			fmt.Println("http2typeFrameParser")
 			return nil, fr.connError(ce.Code, ce.Reason)
 		}
 		return nil, err
@@ -2906,6 +2908,7 @@ func (fr *http2Framer) readMetaFrame(hf *http2HeadersFrame) (*http2MetaHeadersFr
 	for {
 		frag := hc.HeaderBlockFragment()
 		if _, err := hdec.Write(frag); err != nil {
+			fr.debugReadLoggerf("http2: hdec.Write error: (%T) %v", err, err)
 			return nil, http2ConnectionError(http2ErrCodeCompression)
 		}
 
@@ -2923,6 +2926,7 @@ func (fr *http2Framer) readMetaFrame(hf *http2HeadersFrame) (*http2MetaHeadersFr
 	mh.http2HeadersFrame.invalidate()
 
 	if err := hdec.Close(); err != nil {
+		fmt.Println("hdec.Close() ", err)
 		return nil, http2ConnectionError(http2ErrCodeCompression)
 	}
 	if invalid != nil {
@@ -3299,8 +3303,9 @@ const (
 	// HTTP/2's TLS setup.
 	http2NextProtoTLS = "h2"
 
+	// TODO: This has consequences, should
 	// https://httpwg.org/specs/rfc7540.html#SettingValues
-	http2initialHeaderTableSize = 4096
+	http2initialHeaderTableSize = 4096 // 65536
 
 	http2initialWindowSize = 65535 // 6.9.2 Initial Flow Control Window Size
 
@@ -7682,6 +7687,12 @@ func (t *http2Transport) expectContinueTimeout() time.Duration {
 func (t *http2Transport) maxDecoderHeaderTableSize() uint32 {
 	if v := t.MaxDecoderHeaderTableSize; v > 0 {
 		return v
+	}
+	// Needed else you may see connection error: COMPRESSION_ERROR upon hdec.Write(frag)
+	if t.t1.HTTP2SettingsFrameParameters != nil && len(t.t1.HTTP2SettingsFrameParameters) > 0 {
+		if t.t1.HTTP2SettingsFrameParameters[0] > 1 && t.t1.HTTP2SettingsFrameParameters[0] < 4294967295 {
+			return uint32(t.t1.HTTP2SettingsFrameParameters[0])
+		}
 	}
 	return http2initialHeaderTableSize
 }
