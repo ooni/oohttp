@@ -1659,7 +1659,8 @@ type http2Framer struct {
 	debugReadLoggerf  func(string, ...interface{})
 	debugWriteLoggerf func(string, ...interface{})
 
-	frameCache *http2frameCache // nil if frames aren't reused (default)
+	frameCache     *http2frameCache // nil if frames aren't reused (default)
+	HeaderPriority *http2PriorityParam
 }
 
 func (fr *http2Framer) maxHeaderListSize() uint32 {
@@ -2419,6 +2420,9 @@ type http2HeadersFrameParam struct {
 // It will perform exactly one Write to the underlying Writer.
 // It is the caller's responsibility to not call other Write methods concurrently.
 func (f *http2Framer) WriteHeaders(p http2HeadersFrameParam) error {
+	if f.HeaderPriority != nil {
+		p.Priority = *f.HeaderPriority
+	}
 	if !http2validStreamID(p.StreamID) && !f.AllowIllegalWrites {
 		return http2errStreamID
 	}
@@ -7753,14 +7757,13 @@ func (t *http2Transport) newClientConn(c net.Conn, singleUse bool) (*http2Client
 	}
 
 	var initialSettings []http2Setting
-	if t.t1.hasCustomInitialSettings {
-		initialSettings = []http2Setting{
-			{ID: http2SettingHeaderTableSize, Val: t.t1.HeaderTableSize},
-			{ID: http2SettingEnablePush, Val: t.t1.EnablePush},
-			{ID: http2SettingMaxConcurrentStreams, Val: t.t1.MaxConcurrentStreams},
-			{ID: http2SettingInitialWindowSize, Val: t.t1.InitialWindowSize},
-			{ID: http2SettingMaxFrameSize, Val: t.t1.MaxFrameSize},
-			{ID: http2SettingMaxHeaderListSize, Val: t.t1.MaxHeaderListSize},
+	if t.t1.HasCustomInitialSettings {
+		for id, value := range t.t1.HTTP2SettingsFrameParameters {
+			if value < 0 || value > 4294967295 {
+				// Skip because value is invalid
+				continue
+			}
+			initialSettings = append(initialSettings, http2Setting{ID: http2SettingID(id + 1), Val: uint32(value)})
 		}
 	} else {
 		initialSettings = []http2Setting{
@@ -7778,9 +7781,40 @@ func (t *http2Transport) newClientConn(c net.Conn, singleUse bool) (*http2Client
 		}
 	}
 
+	windowUpdateIncrement := uint32(http2transportDefaultConnFlow)
+	if t.t1.HasCustomWindowUpdate {
+		windowUpdateIncrement = t.t1.WindowUpdateIncrement
+	}
+
 	cc.bw.Write(http2clientPreface)
 	cc.fr.WriteSettings(initialSettings...)
-	cc.fr.WriteWindowUpdate(0, http2transportDefaultConnFlow)
+	cc.fr.WriteWindowUpdate(0, windowUpdateIncrement)
+	// cc.addStreamLocked()
+
+	if t.t1.HTTP2PriorityFrameSettings != nil {
+		if t.t1.HTTP2PriorityFrameSettings.HeaderFrame != nil {
+			cc.fr.HeaderPriority = &http2PriorityParam{
+				StreamDep: t.t1.HTTP2PriorityFrameSettings.HeaderFrame.StreamDep,
+				Exclusive: t.t1.HTTP2PriorityFrameSettings.HeaderFrame.Exclusive,
+				Weight:    t.t1.HTTP2PriorityFrameSettings.HeaderFrame.Weight,
+			}
+		}
+
+		for streamId, priority := range t.t1.HTTP2PriorityFrameSettings.PriorityFrames {
+			cc.mu.Lock()
+			cc.nextStreamID++
+			cc.mu.Unlock()
+			if priority == nil {
+				continue
+			}
+			cc.fr.WritePriority(uint32((streamId)), http2PriorityParam{
+				StreamDep: priority.StreamDep,
+				Exclusive: priority.Exclusive,
+				Weight:    priority.Weight,
+			})
+		}
+	}
+
 	cc.inflow.add(http2transportDefaultConnFlow + http2initialWindowSize)
 	cc.bw.Flush()
 	if cc.werr != nil {

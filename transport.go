@@ -293,44 +293,29 @@ type Transport struct {
 	// per-Transport-or-global TLSClientFactory mechanism.)
 	TLSClientFactory func(conn net.Conn, config *tls.Config) TLSConn
 
-	hasCustomInitialSettings bool
+	HasCustomInitialSettings bool
+	HasCustomWindowUpdate    bool
 
-	// MaxHeaderListSize is the http2 SETTINGS_MAX_HEADER_LIST_SIZE to
-	// send in the initial settings frame. It is how many bytes
-	// of response headers are allowed. Unlike the http2 spec, zero here
-	// means to use a default limit (currently 10MB). If you actually
-	// want to advertise an unlimited value to the peer, Transport
-	// interprets the highest possible value here (0xffffffff or 1<<32-1)
-	// to mean no limit.
-	MaxHeaderListSize uint32
+	HTTP2PriorityFrameSettings *HTTP2PriorityFrameSettings
 
-	// MaxReadFrameSize is the http2 SETTINGS_MAX_FRAME_SIZE to send in the
-	// initial settings frame. It is the size in bytes of the largest frame
-	// payload that the sender is willing to receive. If 0, no setting is
-	// sent, and the value is provided by the peer, which should be 16384
-	// according to the spec:
-	// https://datatracker.ietf.org/doc/html/rfc7540#section-6.5.2.
-	// Values are bounded in the range 16k to 16M.
-	MaxFrameSize uint32
+	// HTTP2SettingsFrameParameters contains all the parameters you can send in the SETTINGS frame.
+	// The index + 1 is equal to the parameter ID so index 0 would control HEADER_TABLE_SIZE etc
+	// If the value is -1 or larger than the max size of uint32, it will NOT be sent. Not all browsers send all frames.
+	HTTP2SettingsFrameParameters []int64
 
-	// MaxDecoderHeaderTableSize optionally specifies the http2
-	// SETTINGS_HEADER_TABLE_SIZE to send in the initial settings frame. It
-	// informs the remote endpoint of the maximum size of the header compression
-	// table used to decode header blocks, in octets. If zero, the default value
-	// of 4096 is used.
-	HeaderTableSize uint32
+	// increment to send in the WINDOW_UPDATE frame.
+	WindowUpdateIncrement uint32
+}
 
-	// MaxDecoderHeaderTableSize optionally specifies the http2
-	// SETTINGS_ENABLE_PUSH to send in the initial settings frame.
-	EnablePush uint32
+type HTTP2PriorityFrameSettings struct {
+	PriorityFrames []*HTTP2Priority
+	HeaderFrame    *HTTP2Priority
+}
 
-	// MaxDecoderHeaderTableSize optionally specifies the http2
-	// SETTINGS_MAX_CONCURRENT_STREAMS to send in the initial settings frame.
-	MaxConcurrentStreams uint32
-
-	// MaxDecoderHeaderTableSize optionally specifies the http2
-	// SETTINGS_INITIAL_WINDOW_SIZE to send in the initial settings frame.
-	InitialWindowSize uint32
+type HTTP2Priority struct {
+	StreamDep uint32
+	Exclusive bool
+	Weight    uint8
 }
 
 // A cancelKey is the key of the reqCanceler map.
@@ -341,7 +326,7 @@ type cancelKey struct {
 }
 
 func (t *Transport) EnableCustomInitialSettings() {
-	t.hasCustomInitialSettings = true
+	t.HasCustomInitialSettings = true
 }
 
 func (t *Transport) writeBufferSize() int {
@@ -362,28 +347,32 @@ func (t *Transport) readBufferSize() int {
 func (t *Transport) Clone() *Transport {
 	t.nextProtoOnce.Do(t.onceSetNextProtoDefaults)
 	t2 := &Transport{
-		Proxy:                  t.Proxy,
-		OnProxyConnectResponse: t.OnProxyConnectResponse,
-		DialContext:            t.DialContext,
-		Dial:                   t.Dial,
-		DialTLS:                t.DialTLS,
-		DialTLSContext:         t.DialTLSContext,
-		TLSHandshakeTimeout:    t.TLSHandshakeTimeout,
-		DisableKeepAlives:      t.DisableKeepAlives,
-		DisableCompression:     t.DisableCompression,
-		MaxIdleConns:           t.MaxIdleConns,
-		MaxIdleConnsPerHost:    t.MaxIdleConnsPerHost,
-		MaxConnsPerHost:        t.MaxConnsPerHost,
-		IdleConnTimeout:        t.IdleConnTimeout,
-		ResponseHeaderTimeout:  t.ResponseHeaderTimeout,
-		ExpectContinueTimeout:  t.ExpectContinueTimeout,
-		ProxyConnectHeader:     t.ProxyConnectHeader.Clone(),
-		GetProxyConnectHeader:  t.GetProxyConnectHeader,
-		MaxResponseHeaderBytes: t.MaxResponseHeaderBytes,
-		ForceAttemptHTTP2:      t.ForceAttemptHTTP2,
-		WriteBufferSize:        t.WriteBufferSize,
-		ReadBufferSize:         t.ReadBufferSize,
-		TLSClientFactory:       t.TLSClientFactory,
+		Proxy:                    t.Proxy,
+		OnProxyConnectResponse:   t.OnProxyConnectResponse,
+		DialContext:              t.DialContext,
+		Dial:                     t.Dial,
+		DialTLS:                  t.DialTLS,
+		DialTLSContext:           t.DialTLSContext,
+		TLSHandshakeTimeout:      t.TLSHandshakeTimeout,
+		DisableKeepAlives:        t.DisableKeepAlives,
+		DisableCompression:       t.DisableCompression,
+		MaxIdleConns:             t.MaxIdleConns,
+		MaxIdleConnsPerHost:      t.MaxIdleConnsPerHost,
+		MaxConnsPerHost:          t.MaxConnsPerHost,
+		IdleConnTimeout:          t.IdleConnTimeout,
+		ResponseHeaderTimeout:    t.ResponseHeaderTimeout,
+		ExpectContinueTimeout:    t.ExpectContinueTimeout,
+		ProxyConnectHeader:       t.ProxyConnectHeader.Clone(),
+		GetProxyConnectHeader:    t.GetProxyConnectHeader,
+		MaxResponseHeaderBytes:   t.MaxResponseHeaderBytes,
+		ForceAttemptHTTP2:        t.ForceAttemptHTTP2,
+		WriteBufferSize:          t.WriteBufferSize,
+		ReadBufferSize:           t.ReadBufferSize,
+		TLSClientFactory:         t.TLSClientFactory,
+		HasCustomInitialSettings: t.HasCustomInitialSettings,
+		HasCustomWindowUpdate:    t.HasCustomWindowUpdate,
+		HasHeaderPriority:        t.HasHeaderPriority,
+		WindowUpdateIncrement:    t.WindowUpdateIncrement,
 	}
 	if t.TLSClientConfig != nil {
 		t2.TLSClientConfig = t.TLSClientConfig.Clone()
