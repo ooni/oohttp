@@ -234,8 +234,8 @@ patches](#patches) still hold;
 - [ ] make sure the codebase does not assume `*tls.Conn` *anywhere* (`git grep -n '\*tls\.Conn'`)
 and otherwise replace `*tls.Conn` with `TLSConn`;
 
-- [ ] make sure the codebase does not call `tls.Client` *anywhere* (`git grep -n 'tls\.Client'`)
-and otherwise replace `tls.Client` with `TLSClientFactory`;
+- [ ] make sure the codebase does not call `tls.Client` *anywhere* except for `tlsconn.go`
+(`git grep -n 'tls\.Client'`) and otherwise replace `tls.Client` with `TLSClientFactory`;
 
 - [ ] ensure `go build -v ./...` still works;
 
@@ -248,7 +248,7 @@ the `Request` and `Response` fields;
 
 - [ ] commit the changes and push `merged-main` to gitub;
 
-- [ ] open a PR and merge it *using a merge commit*;
+- [ ] open a PR using this check-list as part of the PR text and merge it *using a merge commit*;
 
 - [ ] create a new working branch to update the examples;
 
