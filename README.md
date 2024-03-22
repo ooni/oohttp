@@ -246,6 +246,8 @@ the `Request` and `Response` fields;
 
 - [ ] run `go get -u -v ./... && go mod tidy`;
 
+- [ ] make sure the Go version used by GitHub actions is correct;
+
 - [ ] commit the changes and push `merged-main` to gitub;
 
 - [ ] open a PR using this check-list as part of the PR text and merge it *using a merge commit*;
