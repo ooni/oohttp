@@ -18,7 +18,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ooni/oohttp"
+	http "github.com/ooni/oohttp"
 )
 
 // hello world, the web server

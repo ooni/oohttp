@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ooni/oohttp"
+	http "github.com/ooni/oohttp"
 )
 
 type eofReader struct{}

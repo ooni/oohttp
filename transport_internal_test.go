@@ -16,7 +16,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ooni/oohttp/internal/testcert"
+	testcert "github.com/ooni/oohttp/internal/testcert"
 )
 
 // Issue 15446: incorrect wrapping of errors when server closes an idle connection.

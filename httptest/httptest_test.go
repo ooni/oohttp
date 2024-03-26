@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ooni/oohttp"
+	http "github.com/ooni/oohttp"
 )
 
 func TestNewRequest(t *testing.T) {

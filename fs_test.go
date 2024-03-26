@@ -27,7 +27,7 @@ import (
 	"time"
 
 	. "github.com/ooni/oohttp"
-	"github.com/ooni/oohttp/httptest"
+	httptest "github.com/ooni/oohttp/httptest"
 )
 
 const (

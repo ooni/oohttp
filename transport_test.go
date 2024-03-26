@@ -39,10 +39,10 @@ import (
 	"time"
 
 	. "github.com/ooni/oohttp"
-	"github.com/ooni/oohttp/httptest"
-	"github.com/ooni/oohttp/httptrace"
-	"github.com/ooni/oohttp/httputil"
-	"github.com/ooni/oohttp/internal/testcert"
+	httptest "github.com/ooni/oohttp/httptest"
+	httptrace "github.com/ooni/oohttp/httptrace"
+	httputil "github.com/ooni/oohttp/httputil"
+	testcert "github.com/ooni/oohttp/internal/testcert"
 	"golang.org/x/net/http/httpguts"
 )
 

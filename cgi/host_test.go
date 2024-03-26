@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ooni/oohttp"
-	"github.com/ooni/oohttp/httptest"
+	http "github.com/ooni/oohttp"
+	httptest "github.com/ooni/oohttp/httptest"
 )
 
 func newRequest(httpreq string) *http.Request {

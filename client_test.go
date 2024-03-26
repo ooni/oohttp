@@ -18,6 +18,7 @@ import (
 	"net"
 	"net/url"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,8 +27,9 @@ import (
 	"time"
 
 	. "github.com/ooni/oohttp"
-	"github.com/ooni/oohttp/cookiejar"
-	"github.com/ooni/oohttp/httptest"
+	cookiejar "github.com/ooni/oohttp/cookiejar"
+	httptest "github.com/ooni/oohttp/httptest"
+	testenv "github.com/ooni/oohttp/internal/testenv"
 )
 
 var robotsTxtHandler = HandlerFunc(func(w ResponseWriter, r *Request) {
@@ -1237,6 +1239,9 @@ func testClientTimeout(t *testing.T, mode testMode) {
 				t.Logf("timeout before response received")
 				continue
 			}
+			if runtime.GOOS == "windows" && strings.HasPrefix(runtime.GOARCH, "arm") {
+				testenv.SkipFlaky(t, 43120)
+			}
 			t.Fatal(err)
 		}
 
@@ -1260,6 +1265,9 @@ func testClientTimeout(t *testing.T, mode testMode) {
 			t.Errorf("net.Error.Timeout = false; want true")
 		}
 		if got := ne.Error(); !strings.Contains(got, "(Client.Timeout") {
+			if runtime.GOOS == "windows" && strings.HasPrefix(runtime.GOARCH, "arm") {
+				testenv.SkipFlaky(t, 43120)
+			}
 			t.Errorf("error string = %q; missing timeout substring", got)
 		}
 
@@ -1300,6 +1308,9 @@ func testClientTimeout_Headers(t *testing.T, mode testMode) {
 		t.Error("net.Error.Timeout = false; want true")
 	}
 	if got := ne.Error(); !strings.Contains(got, "Client.Timeout exceeded") {
+		if runtime.GOOS == "windows" && strings.HasPrefix(runtime.GOARCH, "arm") {
+			testenv.SkipFlaky(t, 43120)
+		}
 		t.Errorf("error string = %q; missing timeout substring", got)
 	}
 }
