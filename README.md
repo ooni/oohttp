@@ -225,11 +225,11 @@ minor changes (e.g., updating docs) directly on the `main` branch.
 - [ ] update [UPSTREAM](UPSTREAM), commit the change, and then
 run the `./tools/merge.bash` script to merge from upstream;
 
-- [ ] make sure you synch [./internal/safefilepath](./internal/safefilepath) with the
-`./src/internal/safefilepath` of the Go release you're merging from;
-
 - [ ] solve the very-likely merge conflicts and ensure [the original spirit of the
 patches](#patches) still hold;
+
+- [ ] make sure you synch [./internal/safefilepath](./internal/safefilepath) with the
+`./src/internal/safefilepath` of the Go release you're merging from;
 
 - [ ] make sure the codebase does not assume `*tls.Conn` *anywhere* (`git grep -n '\*tls\.Conn'`)
 and otherwise replace `*tls.Conn` with `TLSConn`;
