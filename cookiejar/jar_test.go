@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ooni/oohttp"
+	http "github.com/ooni/oohttp"
 )
 
 // tNow is the synthetic current time used as now during testing.

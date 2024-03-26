@@ -12,7 +12,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/ooni/oohttp"
+	http "github.com/ooni/oohttp"
 )
 
 // NewRequest returns a new incoming server Request, suitable

@@ -31,9 +31,9 @@ import (
 	"time"
 
 	. "github.com/ooni/oohttp"
-	"github.com/ooni/oohttp/httptest"
-	"github.com/ooni/oohttp/httptrace"
-	"github.com/ooni/oohttp/httputil"
+	httptest "github.com/ooni/oohttp/httptest"
+	httptrace "github.com/ooni/oohttp/httptrace"
+	httputil "github.com/ooni/oohttp/httputil"
 )
 
 type testMode string

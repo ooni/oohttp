@@ -15,7 +15,7 @@ import (
 	"testing"
 
 	. "github.com/ooni/oohttp"
-	"github.com/ooni/oohttp/httptest"
+	httptest "github.com/ooni/oohttp/httptest"
 )
 
 func TestNextProtoUpgrade(t *testing.T) {

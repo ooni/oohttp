@@ -37,11 +37,12 @@ import (
 	"time"
 
 	. "github.com/ooni/oohttp"
-	"github.com/ooni/oohttp/httptest"
-	"github.com/ooni/oohttp/httptrace"
-	"github.com/ooni/oohttp/httputil"
-	"github.com/ooni/oohttp/internal"
-	"github.com/ooni/oohttp/internal/testcert"
+	httptest "github.com/ooni/oohttp/httptest"
+	httptrace "github.com/ooni/oohttp/httptrace"
+	httputil "github.com/ooni/oohttp/httputil"
+	internal "github.com/ooni/oohttp/internal"
+	testcert "github.com/ooni/oohttp/internal/testcert"
+	testenv "github.com/ooni/oohttp/internal/testenv"
 )
 
 type dummyAddr string
@@ -1887,6 +1888,43 @@ func TestServerUnreadRequestBodyLittle(t *testing.T) {
 	<-done
 }
 
+// Over a ~256KB (maxPostHandlerReadBytes) threshold, the server
+// should ignore client request bodies that a handler didn't read
+// and close the connection.
+func TestServerUnreadRequestBodyLarge(t *testing.T) {
+	t.Skip("test disabled in the github.com/ooni/oohttp fork")
+	setParallel(t)
+	if testing.Short() && testenv.Builder() == "" {
+		t.Log("skipping in short mode")
+	}
+	conn := new(testConn)
+	body := strings.Repeat("x", 1<<20)
+	conn.readBuf.Write([]byte(fmt.Sprintf(
+		"POST / HTTP/1.1\r\n"+
+			"Host: test\r\n"+
+			"Content-Length: %d\r\n"+
+			"\r\n", len(body))))
+	conn.readBuf.Write([]byte(body))
+	conn.closec = make(chan bool, 1)
+
+	ls := &oneConnListener{conn}
+	go Serve(ls, HandlerFunc(func(rw ResponseWriter, req *Request) {
+		if conn.readBuf.Len() < len(body)/2 {
+			t.Errorf("on request, read buffer length is %d; expected about 1MB", conn.readBuf.Len())
+		}
+		rw.WriteHeader(200)
+		rw.(Flusher).Flush()
+		if conn.readBuf.Len() < len(body)/2 {
+			t.Errorf("post-WriteHeader, read buffer length is %d; expected about 1MB", conn.readBuf.Len())
+		}
+	}))
+	<-conn.closec
+
+	if res := conn.writeBuf.String(); !strings.Contains(res, "Connection: close") {
+		t.Errorf("Expected a Connection: close header; got response: %s", res)
+	}
+}
+
 type handlerBodyCloseTest struct {
 	bodySize     int
 	bodyChunked  bool
@@ -1986,6 +2024,17 @@ var handlerBodyCloseTests = [...]handlerBodyCloseTest{
 		wantEOFSearch: false,
 		wantNextReq:   false,
 	},
+}
+
+func TestHandlerBodyClose(t *testing.T) {
+	t.Skip("test disabled in the github.com/ooni/oohttp fork")
+	setParallel(t)
+	if testing.Short() && testenv.Builder() == "" {
+		t.Skip("skipping in -short mode")
+	}
+	for i, tt := range handlerBodyCloseTests {
+		testHandlerBodyClose(t, i, tt)
+	}
 }
 
 func testHandlerBodyClose(t *testing.T, i int, tt handlerBodyCloseTest) {
@@ -5814,6 +5863,10 @@ func TestServerDuplicateBackgroundRead(t *testing.T) {
 	run(t, testServerDuplicateBackgroundRead, []testMode{http1Mode})
 }
 func testServerDuplicateBackgroundRead(t *testing.T, mode testMode) {
+	if runtime.GOOS == "netbsd" && runtime.GOARCH == "arm" {
+		testenv.SkipFlaky(t, 24826)
+	}
+
 	goroutines := 5
 	requests := 2000
 	if testing.Short() {

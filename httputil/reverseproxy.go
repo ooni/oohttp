@@ -21,8 +21,8 @@ import (
 	"time"
 
 	http "github.com/ooni/oohttp"
-	"github.com/ooni/oohttp/httptrace"
-	"github.com/ooni/oohttp/internal/ascii"
+	httptrace "github.com/ooni/oohttp/httptrace"
+	ascii "github.com/ooni/oohttp/internal/ascii"
 	"golang.org/x/net/http/httpguts"
 )
 
