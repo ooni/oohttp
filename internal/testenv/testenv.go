@@ -2,7 +2,11 @@
 // the amount of deleted line with respect to upstream.
 package testenv
 
-import "testing"
+import (
+	"context"
+	"os/exec"
+	"testing"
+)
 
 // MustHaveExec always skips the current test.
 func MustHaveExec(t testing.TB) {
@@ -27,4 +31,9 @@ func GoToolPath(t testing.TB) string {
 // Builder always returns the empty string.
 func Builder() string {
 	return ""
+}
+
+func CommandContext(t testing.TB, ctx context.Context, name string, args ...string) *exec.Cmd {
+	t.Skip("testenv.CommandContext is not enabled in this fork")
+	return &exec.Cmd{}
 }

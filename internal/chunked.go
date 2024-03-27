@@ -76,9 +76,7 @@ func (cr *chunkedReader) beginChunk() {
 	// Currently, we say that we're willing to accept 16 bytes of overhead per chunk,
 	// plus twice the amount of real data in the chunk.
 	cr.excess -= 16 + (2 * int64(cr.n))
-	if cr.excess < 0 {
-		cr.excess = 0
-	}
+	cr.excess = max(cr.excess, 0)
 	if cr.excess > 16*1024 {
 		cr.err = errors.New("chunked encoding contains too much non-data")
 	}

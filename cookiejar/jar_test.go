@@ -253,6 +253,7 @@ var isIPTests = map[string]bool{
 	"127.0.0.1":            true,
 	"1.2.3.4":              true,
 	"2001:4860:0:2001::68": true,
+	"::1%zone":             true,
 	"example.com":          false,
 	"1.1.1.300":            false,
 	"www.foo.bar.net":      false,
@@ -350,7 +351,7 @@ func expiresIn(delta int) string {
 	return "expires=" + t.Format(time.RFC1123)
 }
 
-// mustParseURL parses s to an URL and panics on error.
+// mustParseURL parses s to a URL and panics on error.
 func mustParseURL(s string) *url.URL {
 	u, err := url.Parse(s)
 	if err != nil || u.Scheme == "" || u.Host == "" {
@@ -630,6 +631,15 @@ var basicsTests = [...]jarTest{
 			{"http://www.host.test:1234/", "a=1"},
 		},
 	},
+	{
+		"IPv6 zone is not treated as a host.",
+		"https://example.com/",
+		[]string{"a=1"},
+		"a=1",
+		[]query{
+			{"https://[::1%25.example.com]:80/", ""},
+		},
+	},
 }
 
 func TestBasics(t *testing.T) {
@@ -671,7 +681,7 @@ var updateAndDeleteTests = [...]jarTest{
 		},
 	},
 	{
-		"Clear Secure flag from a http.",
+		"Clear Secure flag from an http.",
 		"http://www.host.test/",
 		[]string{
 			"b=xx",
