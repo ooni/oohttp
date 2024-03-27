@@ -238,7 +238,8 @@ and otherwise replace `*tls.Conn` with `TLSConn`;
 (`git grep -n 'tls\.Client'`) and otherwise replace `tls.Client` with `TLSClientFactory`;
 
 - [ ] diff with upstream (`./tools/compare.bash`) and make sure what you see
-makes sense in terms of the original patches;
+makes sense in terms of the original patches, save the diff, and include it into
+the PR to document the actual changes between us and upstream.
 
 - [ ] ensure `go build -v ./...` still works;
 

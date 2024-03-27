@@ -18,13 +18,13 @@ test -d $upstreamrepo || git clone git@github.com:golang/go.git $upstreamrepo
 #
 # - src/net/http/internal/testcert => ./internal/testcert
 
-diff -ur $upstreamrepo/src/net/http .
+diff -ur $upstreamrepo/src/net/http . || true
 
 # 2. packages that we need to diff for explicitly
 #
 # - src/internal/safefilepath => ./internal/safefilepath
 
-diff -ur $upstreamrepo/src/internal/safefilepath ./internal/safefilepath
+diff -ur $upstreamrepo/src/internal/safefilepath ./internal/safefilepath || true
 
 # 3. replacement packages
 #
