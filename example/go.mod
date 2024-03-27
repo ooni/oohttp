@@ -1,6 +1,8 @@
 module github.com/ooni/oohttp/example
 
-go 1.20
+go 1.21
+
+toolchain go1.21.8
 
 require (
 	github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5
