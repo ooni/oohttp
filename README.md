@@ -237,6 +237,9 @@ and otherwise replace `*tls.Conn` with `TLSConn`;
 - [ ] make sure the codebase does not call `tls.Client` *anywhere* except for `tlsconn.go`
 (`git grep -n 'tls\.Client'`) and otherwise replace `tls.Client` with `TLSClientFactory`;
 
+- [ ] diff with upstream (`diff --color=never -ru .../golang/go/src/net/http .`) and
+make sure what you see makes sense in terms of the original patches;
+
 - [ ] ensure `go build -v ./...` still works;
 
 - [ ] ensure `go test -race ./...` is still passing;
