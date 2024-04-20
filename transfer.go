@@ -18,9 +18,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ooni/oohttp/httptrace"
-	"github.com/ooni/oohttp/internal"
-	"github.com/ooni/oohttp/internal/ascii"
+	httptrace "github.com/ooni/oohttp/httptrace"
+	internal "github.com/ooni/oohttp/internal"
+	ascii "github.com/ooni/oohttp/internal/ascii"
 	"golang.org/x/net/http/httpguts"
 )
 
@@ -465,7 +465,7 @@ func (t *transferWriter) doBodyCopy(dst io.Writer, src io.Reader) (n int64, err 
 	return
 }
 
-// unwrapBodyReader unwraps the body's inner reader if it's a
+// unwrapBody unwraps the body's inner reader if it's a
 // nopCloser. This is to ensure that body writes sourced from local
 // files (*os.File types) are properly optimized.
 //

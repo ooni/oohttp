@@ -225,17 +225,21 @@ minor changes (e.g., updating docs) directly on the `main` branch.
 - [ ] update [UPSTREAM](UPSTREAM), commit the change, and then
 run the `./tools/merge.bash` script to merge from upstream;
 
-- [ ] make sure you synch [./internal/safefilepath](./internal/safefilepath) with the
-`./src/internal/safefilepath` of the Go release you're merging from;
-
 - [ ] solve the very-likely merge conflicts and ensure [the original spirit of the
 patches](#patches) still hold;
+
+- [ ] make sure you synch [./internal/safefilepath](./internal/safefilepath) with the
+`./src/internal/safefilepath` of the Go release you're merging from;
 
 - [ ] make sure the codebase does not assume `*tls.Conn` *anywhere* (`git grep -n '\*tls\.Conn'`)
 and otherwise replace `*tls.Conn` with `TLSConn`;
 
 - [ ] make sure the codebase does not call `tls.Client` *anywhere* except for `tlsconn.go`
 (`git grep -n 'tls\.Client'`) and otherwise replace `tls.Client` with `TLSClientFactory`;
+
+- [ ] diff with upstream (`./tools/compare.bash`) and make sure what you see
+makes sense in terms of the original patches, save the diff, and include it into
+the PR to document the actual changes between us and upstream.
 
 - [ ] ensure `go build -v ./...` still works;
 
@@ -245,6 +249,8 @@ and otherwise replace `*tls.Conn` with `TLSConn`;
 the `Request` and `Response` fields;
 
 - [ ] run `go get -u -v ./... && go mod tidy`;
+
+- [ ] make sure the Go version used by GitHub actions is correct;
 
 - [ ] commit the changes and push `merged-main` to gitub;
 

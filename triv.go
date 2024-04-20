@@ -18,7 +18,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ooni/oohttp"
+	http "github.com/ooni/oohttp"
 )
 
 // hello world, the web server
@@ -40,7 +40,7 @@ type Counter struct {
 func (ctr *Counter) String() string {
 	ctr.mu.Lock()
 	defer ctr.mu.Unlock()
-	return fmt.Sprintf("%d", ctr.n)
+	return strconv.Itoa(ctr.n)
 }
 
 func (ctr *Counter) ServeHTTP(w http.ResponseWriter, req *http.Request) {

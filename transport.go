@@ -28,8 +28,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ooni/oohttp/httptrace"
-	"github.com/ooni/oohttp/internal/ascii"
+	httptrace "github.com/ooni/oohttp/httptrace"
+	ascii "github.com/ooni/oohttp/internal/ascii"
 	"golang.org/x/net/http/httpguts"
 	"golang.org/x/net/http/httpproxy"
 )
@@ -84,13 +84,13 @@ const DefaultMaxIdleConnsPerHost = 2
 // ClientTrace.Got1xxResponse.
 //
 // Transport only retries a request upon encountering a network error
-// if the request is idempotent and either has no body or has its
-// Request.GetBody defined. HTTP requests are considered idempotent if
-// they have HTTP methods GET, HEAD, OPTIONS, or TRACE; or if their
-// Header map contains an "Idempotency-Key" or "X-Idempotency-Key"
-// entry. If the idempotency key value is a zero-length slice, the
-// request is treated as idempotent but the header is not sent on the
-// wire.
+// if the connection has been already been used successfully and if the
+// request is idempotent and either has no body or has its Request.GetBody
+// defined. HTTP requests are considered idempotent if they have HTTP methods
+// GET, HEAD, OPTIONS, or TRACE; or if their Header map contains an
+// "Idempotency-Key" or "X-Idempotency-Key" entry. If the idempotency key
+// value is a zero-length slice, the request is treated as idempotent but the
+// header is not sent on the wire.
 type Transport struct {
 	idleMu       sync.Mutex
 	closeIdle    bool                                // user has requested to close all idle conns
@@ -172,7 +172,7 @@ type Transport struct {
 	// If non-nil, HTTP/2 support may not be enabled by default.
 	TLSClientConfig *tls.Config
 
-	// TLSHandshakeTimeout specifies the maximum amount of time waiting to
+	// TLSHandshakeTimeout specifies the maximum amount of time to
 	// wait for a TLS handshake. Zero means no timeout.
 	TLSHandshakeTimeout time.Duration
 
@@ -657,6 +657,12 @@ func (t *Transport) roundTrip(req *Request) (*Response, error) {
 			}
 			if e, ok := err.(transportReadFromServerError); ok {
 				err = e.err
+			}
+			if b, ok := req.Body.(*readTrackingBody); ok && !b.didClose {
+				// Issue 49621: Close the request body if pconn.roundTrip
+				// didn't do so already. This can happen if the pconn
+				// write loop exits without reading the write request.
+				req.closeBody()
 			}
 			return nil, err
 		}
@@ -1210,7 +1216,11 @@ var zeroDialer net.Dialer
 
 func (t *Transport) dial(ctx context.Context, network, addr string) (net.Conn, error) {
 	if t.DialContext != nil {
-		return t.DialContext(ctx, network, addr)
+		c, err := t.DialContext(ctx, network, addr)
+		if c == nil && err == nil {
+			err = errors.New("net/http: Transport.DialContext hook returned (nil, nil)")
+		}
+		return c, err
 	}
 	if t.Dial != nil {
 		c, err := t.Dial(network, addr)
@@ -2482,7 +2492,10 @@ func (pc *persistConn) writeLoop() {
 // maxWriteWaitBeforeConnReuse is how long the a Transport RoundTrip
 // will wait to see the Request's Body.Write result after getting a
 // response from the server. See comments in (*persistConn).wroteRequest.
-const maxWriteWaitBeforeConnReuse = 50 * time.Millisecond
+//
+// In tests, we set this to a large value to avoid flakiness from inconsistent
+// recycling of connections.
+var maxWriteWaitBeforeConnReuse = 50 * time.Millisecond
 
 // wroteRequest is a check before recycling a connection that the previous write
 // (from writeLoop above) happened and was successful.
@@ -2780,17 +2793,21 @@ var portMap = map[string]string{
 	"socks5": "1080",
 }
 
-// canonicalAddr returns url.Host but always with a ":port" suffix.
-func canonicalAddr(url *url.URL) string {
+func idnaASCIIFromURL(url *url.URL) string {
 	addr := url.Hostname()
 	if v, err := idnaASCII(addr); err == nil {
 		addr = v
 	}
+	return addr
+}
+
+// canonicalAddr returns url.Host but always with a ":port" suffix.
+func canonicalAddr(url *url.URL) string {
 	port := url.Port()
 	if port == "" {
 		port = portMap[url.Scheme]
 	}
-	return net.JoinHostPort(addr, port)
+	return net.JoinHostPort(idnaASCIIFromURL(url), port)
 }
 
 // bodyEOFSignal is used by the HTTP/1 transport when reading response

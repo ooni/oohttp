@@ -24,8 +24,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ooni/oohttp/httptrace"
-	"github.com/ooni/oohttp/internal/ascii"
+	httptrace "github.com/ooni/oohttp/httptrace"
+	ascii "github.com/ooni/oohttp/internal/ascii"
 	"golang.org/x/net/http/httpguts"
 	"golang.org/x/net/idna"
 )
@@ -47,6 +47,11 @@ type ProtocolError struct {
 }
 
 func (pe *ProtocolError) Error() string { return pe.ErrorString }
+
+// Is lets http.ErrNotSupported match errors.ErrUnsupported.
+func (pe *ProtocolError) Is(err error) bool {
+	return pe == ErrNotSupported && err == errors.ErrUnsupported
+}
 
 var (
 	// ErrNotSupported indicates that a feature is not supported.

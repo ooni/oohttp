@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ooni/oohttp"
-	"github.com/ooni/oohttp/httptest"
+	http "github.com/ooni/oohttp"
+	httptest "github.com/ooni/oohttp/httptest"
 )
 
 func TestRequest(t *testing.T) {

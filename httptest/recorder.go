@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ooni/oohttp"
+	http "github.com/ooni/oohttp"
 	"golang.org/x/net/http/httpguts"
 )
 

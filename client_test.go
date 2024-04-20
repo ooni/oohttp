@@ -18,6 +18,7 @@ import (
 	"net"
 	"net/url"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,8 +27,9 @@ import (
 	"time"
 
 	. "github.com/ooni/oohttp"
-	"github.com/ooni/oohttp/cookiejar"
-	"github.com/ooni/oohttp/httptest"
+	cookiejar "github.com/ooni/oohttp/cookiejar"
+	httptest "github.com/ooni/oohttp/httptest"
+	testenv "github.com/ooni/oohttp/internal/testenv"
 )
 
 var robotsTxtHandler = HandlerFunc(func(w ResponseWriter, r *Request) {
@@ -1206,7 +1208,7 @@ func testClientTimeout(t *testing.T, mode testMode) {
 	}))
 
 	// Try to trigger a timeout after reading part of the response body.
-	// The initial timeout is emprically usually long enough on a decently fast
+	// The initial timeout is empirically usually long enough on a decently fast
 	// machine, but if we undershoot we'll retry with exponentially longer
 	// timeouts until the test either passes or times out completely.
 	// This keeps the test reasonably fast in the typical case but allows it to
@@ -1237,6 +1239,9 @@ func testClientTimeout(t *testing.T, mode testMode) {
 				t.Logf("timeout before response received")
 				continue
 			}
+			if runtime.GOOS == "windows" && strings.HasPrefix(runtime.GOARCH, "arm") {
+				testenv.SkipFlaky(t, 43120)
+			}
 			t.Fatal(err)
 		}
 
@@ -1260,6 +1265,9 @@ func testClientTimeout(t *testing.T, mode testMode) {
 			t.Errorf("net.Error.Timeout = false; want true")
 		}
 		if got := ne.Error(); !strings.Contains(got, "(Client.Timeout") {
+			if runtime.GOOS == "windows" && strings.HasPrefix(runtime.GOARCH, "arm") {
+				testenv.SkipFlaky(t, 43120)
+			}
 			t.Errorf("error string = %q; missing timeout substring", got)
 		}
 
@@ -1300,6 +1308,9 @@ func testClientTimeout_Headers(t *testing.T, mode testMode) {
 		t.Error("net.Error.Timeout = false; want true")
 	}
 	if got := ne.Error(); !strings.Contains(got, "Client.Timeout exceeded") {
+		if runtime.GOOS == "windows" && strings.HasPrefix(runtime.GOARCH, "arm") {
+			testenv.SkipFlaky(t, 43120)
+		}
 		t.Errorf("error string = %q; missing timeout substring", got)
 	}
 }
@@ -1401,24 +1412,32 @@ func (f eofReaderFunc) Read(p []byte) (n int, err error) {
 
 func TestReferer(t *testing.T) {
 	tests := []struct {
-		lastReq, newReq string // from -> to URLs
-		want            string
+		lastReq, newReq, explicitRef string // from -> to URLs, explicitly set Referer value
+		want                         string
 	}{
 		// don't send user:
-		{"http://gopher@test.com", "http://link.com", "http://test.com"},
-		{"https://gopher@test.com", "https://link.com", "https://test.com"},
+		{lastReq: "http://gopher@test.com", newReq: "http://link.com", want: "http://test.com"},
+		{lastReq: "https://gopher@test.com", newReq: "https://link.com", want: "https://test.com"},
 
 		// don't send a user and password:
-		{"http://gopher:go@test.com", "http://link.com", "http://test.com"},
-		{"https://gopher:go@test.com", "https://link.com", "https://test.com"},
+		{lastReq: "http://gopher:go@test.com", newReq: "http://link.com", want: "http://test.com"},
+		{lastReq: "https://gopher:go@test.com", newReq: "https://link.com", want: "https://test.com"},
 
 		// nothing to do:
-		{"http://test.com", "http://link.com", "http://test.com"},
-		{"https://test.com", "https://link.com", "https://test.com"},
+		{lastReq: "http://test.com", newReq: "http://link.com", want: "http://test.com"},
+		{lastReq: "https://test.com", newReq: "https://link.com", want: "https://test.com"},
 
 		// https to http doesn't send a referer:
-		{"https://test.com", "http://link.com", ""},
-		{"https://gopher:go@test.com", "http://link.com", ""},
+		{lastReq: "https://test.com", newReq: "http://link.com", want: ""},
+		{lastReq: "https://gopher:go@test.com", newReq: "http://link.com", want: ""},
+
+		// https to http should remove an existing referer:
+		{lastReq: "https://test.com", newReq: "http://link.com", explicitRef: "https://foo.com", want: ""},
+		{lastReq: "https://gopher:go@test.com", newReq: "http://link.com", explicitRef: "https://foo.com", want: ""},
+
+		// don't override an existing referer:
+		{lastReq: "https://test.com", newReq: "https://link.com", explicitRef: "https://foo.com", want: "https://foo.com"},
+		{lastReq: "https://gopher:go@test.com", newReq: "https://link.com", explicitRef: "https://foo.com", want: "https://foo.com"},
 	}
 	for _, tt := range tests {
 		l, err := url.Parse(tt.lastReq)
@@ -1429,7 +1448,7 @@ func TestReferer(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		r := ExportRefererForURL(l, n)
+		r := ExportRefererForURL(l, n, tt.explicitRef)
 		if r != tt.want {
 			t.Errorf("refererForURL(%q, %q) = %q; want %q", tt.lastReq, tt.newReq, r, tt.want)
 		}
@@ -1460,6 +1479,9 @@ func TestClientRedirectResponseWithoutRequest(t *testing.T) {
 }
 
 // Issue 4800: copy (some) headers when Client follows a redirect.
+// Issue 35104: Since both URLs have the same host (localhost)
+// but different ports, sensitive headers like Cookie and Authorization
+// are preserved.
 func TestClientCopyHeadersOnRedirect(t *testing.T) { run(t, testClientCopyHeadersOnRedirect) }
 func testClientCopyHeadersOnRedirect(t *testing.T, mode testMode) {
 	const (
@@ -1473,6 +1495,8 @@ func testClientCopyHeadersOnRedirect(t *testing.T, mode testMode) {
 			"X-Foo":           []string{xfoo},
 			"Referer":         []string{ts2URL},
 			"Accept-Encoding": []string{"gzip"},
+			"Cookie":          []string{"foo=bar"},
+			"Authorization":   []string{"secretpassword"},
 		}
 		if !reflect.DeepEqual(r.Header, want) {
 			t.Errorf("Request.Header = %#v; want %#v", r.Header, want)
@@ -1491,9 +1515,11 @@ func testClientCopyHeadersOnRedirect(t *testing.T, mode testMode) {
 	c := ts1.Client()
 	c.CheckRedirect = func(r *Request, via []*Request) error {
 		want := Header{
-			"User-Agent": []string{ua},
-			"X-Foo":      []string{xfoo},
-			"Referer":    []string{ts2URL},
+			"User-Agent":    []string{ua},
+			"X-Foo":         []string{xfoo},
+			"Referer":       []string{ts2URL},
+			"Cookie":        []string{"foo=bar"},
+			"Authorization": []string{"secretpassword"},
 		}
 		if !reflect.DeepEqual(r.Header, want) {
 			t.Errorf("CheckRedirect Request.Header = %#v; want %#v", r.Header, want)
@@ -1697,18 +1723,31 @@ func TestShouldCopyHeaderOnRedirect(t *testing.T) {
 		{"cookie", "http://foo.com/", "http://bar.com/", false},
 		{"cookie2", "http://foo.com/", "http://bar.com/", false},
 		{"authorization", "http://foo.com/", "http://bar.com/", false},
+		{"authorization", "http://foo.com/", "https://foo.com/", true},
+		{"authorization", "http://foo.com:1234/", "http://foo.com:4321/", true},
 		{"www-authenticate", "http://foo.com/", "http://bar.com/", false},
+		{"authorization", "http://foo.com/", "http://[::1%25.foo.com]/", false},
 
 		// But subdomains should work:
 		{"www-authenticate", "http://foo.com/", "http://foo.com/", true},
 		{"www-authenticate", "http://foo.com/", "http://sub.foo.com/", true},
 		{"www-authenticate", "http://foo.com/", "http://notfoo.com/", false},
-		{"www-authenticate", "http://foo.com/", "https://foo.com/", false},
+		{"www-authenticate", "http://foo.com/", "https://foo.com/", true},
 		{"www-authenticate", "http://foo.com:80/", "http://foo.com/", true},
 		{"www-authenticate", "http://foo.com:80/", "http://sub.foo.com/", true},
 		{"www-authenticate", "http://foo.com:443/", "https://foo.com/", true},
 		{"www-authenticate", "http://foo.com:443/", "https://sub.foo.com/", true},
-		{"www-authenticate", "http://foo.com:1234/", "http://foo.com/", false},
+		{"www-authenticate", "http://foo.com:1234/", "http://foo.com/", true},
+
+		{"authorization", "http://foo.com/", "http://foo.com/", true},
+		{"authorization", "http://foo.com/", "http://sub.foo.com/", true},
+		{"authorization", "http://foo.com/", "http://notfoo.com/", false},
+		{"authorization", "http://foo.com/", "https://foo.com/", true},
+		{"authorization", "http://foo.com:80/", "http://foo.com/", true},
+		{"authorization", "http://foo.com:80/", "http://sub.foo.com/", true},
+		{"authorization", "http://foo.com:443/", "https://foo.com/", true},
+		{"authorization", "http://foo.com:443/", "https://sub.foo.com/", true},
+		{"authorization", "http://foo.com:1234/", "http://foo.com/", true},
 	}
 	for i, tt := range tests {
 		u0, err := url.Parse(tt.initialURL)

@@ -9,7 +9,7 @@ import (
 	"io"
 	"testing"
 
-	"github.com/ooni/oohttp"
+	http "github.com/ooni/oohttp"
 )
 
 func TestRecorder(t *testing.T) {
