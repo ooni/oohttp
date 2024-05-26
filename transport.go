@@ -292,6 +292,30 @@ type Transport struct {
 	// DialTLSContext function, you'll completely bypass this
 	// per-Transport-or-global TLSClientFactory mechanism.)
 	TLSClientFactory func(conn net.Conn, config *tls.Config) TLSConn
+
+	HasCustomInitialSettings bool
+	HasCustomWindowUpdate    bool
+
+	HTTP2PriorityFrameSettings *HTTP2PriorityFrameSettings
+
+	// HTTP2SettingsFrameParameters contains all the parameters you can send in the SETTINGS frame.
+	// The index + 1 is equal to the parameter ID so index 0 would control HEADER_TABLE_SIZE etc
+	// If the value is -1 or larger than the max size of uint32, it will NOT be sent. Not all browsers send all frames.
+	HTTP2SettingsFrameParameters []int64
+
+	// increment to send in the WINDOW_UPDATE frame.
+	WindowUpdateIncrement uint32
+}
+
+type HTTP2PriorityFrameSettings struct {
+	PriorityFrames []*HTTP2Priority
+	HeaderFrame    *HTTP2Priority
+}
+
+type HTTP2Priority struct {
+	StreamDep uint32
+	Exclusive bool
+	Weight    uint8
 }
 
 // A cancelKey is the key of the reqCanceler map.
@@ -299,6 +323,10 @@ type Transport struct {
 // not any transient one created by roundTrip.
 type cancelKey struct {
 	req *Request
+}
+
+func (t *Transport) EnableCustomInitialSettings() {
+	t.HasCustomInitialSettings = true
 }
 
 func (t *Transport) writeBufferSize() int {
@@ -319,28 +347,31 @@ func (t *Transport) readBufferSize() int {
 func (t *Transport) Clone() *Transport {
 	t.nextProtoOnce.Do(t.onceSetNextProtoDefaults)
 	t2 := &Transport{
-		Proxy:                  t.Proxy,
-		OnProxyConnectResponse: t.OnProxyConnectResponse,
-		DialContext:            t.DialContext,
-		Dial:                   t.Dial,
-		DialTLS:                t.DialTLS,
-		DialTLSContext:         t.DialTLSContext,
-		TLSHandshakeTimeout:    t.TLSHandshakeTimeout,
-		DisableKeepAlives:      t.DisableKeepAlives,
-		DisableCompression:     t.DisableCompression,
-		MaxIdleConns:           t.MaxIdleConns,
-		MaxIdleConnsPerHost:    t.MaxIdleConnsPerHost,
-		MaxConnsPerHost:        t.MaxConnsPerHost,
-		IdleConnTimeout:        t.IdleConnTimeout,
-		ResponseHeaderTimeout:  t.ResponseHeaderTimeout,
-		ExpectContinueTimeout:  t.ExpectContinueTimeout,
-		ProxyConnectHeader:     t.ProxyConnectHeader.Clone(),
-		GetProxyConnectHeader:  t.GetProxyConnectHeader,
-		MaxResponseHeaderBytes: t.MaxResponseHeaderBytes,
-		ForceAttemptHTTP2:      t.ForceAttemptHTTP2,
-		WriteBufferSize:        t.WriteBufferSize,
-		ReadBufferSize:         t.ReadBufferSize,
-		TLSClientFactory:       t.TLSClientFactory,
+		Proxy:                    t.Proxy,
+		OnProxyConnectResponse:   t.OnProxyConnectResponse,
+		DialContext:              t.DialContext,
+		Dial:                     t.Dial,
+		DialTLS:                  t.DialTLS,
+		DialTLSContext:           t.DialTLSContext,
+		TLSHandshakeTimeout:      t.TLSHandshakeTimeout,
+		DisableKeepAlives:        t.DisableKeepAlives,
+		DisableCompression:       t.DisableCompression,
+		MaxIdleConns:             t.MaxIdleConns,
+		MaxIdleConnsPerHost:      t.MaxIdleConnsPerHost,
+		MaxConnsPerHost:          t.MaxConnsPerHost,
+		IdleConnTimeout:          t.IdleConnTimeout,
+		ResponseHeaderTimeout:    t.ResponseHeaderTimeout,
+		ExpectContinueTimeout:    t.ExpectContinueTimeout,
+		ProxyConnectHeader:       t.ProxyConnectHeader.Clone(),
+		GetProxyConnectHeader:    t.GetProxyConnectHeader,
+		MaxResponseHeaderBytes:   t.MaxResponseHeaderBytes,
+		ForceAttemptHTTP2:        t.ForceAttemptHTTP2,
+		WriteBufferSize:          t.WriteBufferSize,
+		ReadBufferSize:           t.ReadBufferSize,
+		TLSClientFactory:         t.TLSClientFactory,
+		HasCustomInitialSettings: t.HasCustomInitialSettings,
+		HasCustomWindowUpdate:    t.HasCustomWindowUpdate,
+		WindowUpdateIncrement:    t.WindowUpdateIncrement,
 	}
 	if t.TLSClientConfig != nil {
 		t2.TLSClientConfig = t.TLSClientConfig.Clone()
@@ -529,6 +560,10 @@ func (t *Transport) roundTrip(req *Request) (*Response, error) {
 	if isHTTP {
 		for k, vv := range req.Header {
 			if !httpguts.ValidHeaderFieldName(k) {
+				// Allow the HeaderOrderKey and PHeaderOrderKey magic string, this will be handled further.
+				if k == HeaderOrderKey || k == PHeaderOrderKey {
+					continue
+				}
 				req.closeBody()
 				return nil, fmt.Errorf("net/http: invalid header field name %q", k)
 			}
