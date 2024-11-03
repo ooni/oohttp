@@ -17,6 +17,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/ooni/oohttp/internal/ascii"
 	"io"
 	"log"
 	"net"
@@ -2643,6 +2644,11 @@ func (pc *persistConn) roundTrip(req *transportRequest) (resp *Response, err err
 		// We don't request gzip if the request is for a range, since
 		// auto-decoding a portion of a gzipped document will just fail
 		// anyway. See https://golang.org/issue/8923
+
+		// Default std lib behavior is to default to gzip
+		if ascii.EqualFold(resp.Header.Get("Content-Encoding"), "") {
+			resp.Header.Set("Content-Encoding", "gzip")
+		}
 
 		requestedGzip = true
 		req.extraHeaders().Set("Accept-Encoding", req.Header.Get("Accept-Encoding"))
