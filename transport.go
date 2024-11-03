@@ -29,7 +29,6 @@ import (
 	"time"
 
 	httptrace "github.com/ooni/oohttp/httptrace"
-	ascii "github.com/ooni/oohttp/internal/ascii"
 	"golang.org/x/net/http/httpguts"
 	"golang.org/x/net/http/httpproxy"
 )
@@ -191,7 +190,9 @@ type Transport struct {
 	// decoded in the Response.Body. However, if the user
 	// explicitly requested gzip it is not automatically
 	// uncompressed.
-	DisableCompression bool
+	DisableCompression     bool
+	CompressionFactories   map[string]CompressionFactory
+	DecompressionFactories map[string]DecompressionFactory
 
 	// MaxIdleConns controls the maximum number of idle (keep-alive)
 	// connections across all hosts. Zero means no limit.
@@ -2254,9 +2255,16 @@ func (pc *persistConn) readLoop() {
 		}
 
 		resp.Body = body
-		if rc.addedGzip && ascii.EqualFold(resp.Header.Get("Content-Encoding"), "gzip") {
-			resp.Body = &gzipReader{body: body}
-			resp.Header.Del("Content-Encoding")
+
+		//if rc.addedGzip && ascii.EqualFold(resp.Header.Get("Content-Encoding"), "gzip") {
+		// fmt.Println("Check decompression", rc.addedGzip)
+		if rc.addedGzip {
+			resp.Body, err = decompressReader(body, pc.t.DecompressionFactories, strings.Split(resp.Header.Get("Content-Encoding"), ","))
+			if err != nil {
+				panic(err)
+			}
+			// resp.Body = &gzipReader{body: body}
+			// resp.Header.Del("Content-Encoding")
 			resp.Header.Del("Content-Length")
 			resp.ContentLength = -1
 			resp.Uncompressed = true
@@ -2618,9 +2626,9 @@ func (pc *persistConn) roundTrip(req *transportRequest) (resp *Response, err err
 	// own value for Accept-Encoding. We only attempt to
 	// uncompress the gzip stream if we were the layer that
 	// requested it.
+	// Amendment: We are supporting encoding based on the header present in the request now, not just if the transport decided.
 	requestedGzip := false
 	if !pc.t.DisableCompression &&
-		req.Header.Get("Accept-Encoding") == "" &&
 		req.Header.Get("Range") == "" &&
 		req.Method != "HEAD" {
 		// Request gzip only, not deflate. Deflate is ambiguous and
@@ -2635,8 +2643,10 @@ func (pc *persistConn) roundTrip(req *transportRequest) (resp *Response, err err
 		// We don't request gzip if the request is for a range, since
 		// auto-decoding a portion of a gzipped document will just fail
 		// anyway. See https://golang.org/issue/8923
+
 		requestedGzip = true
-		req.extraHeaders().Set("Accept-Encoding", "gzip")
+		req.extraHeaders().Set("Accept-Encoding", req.Header.Get("Accept-Encoding"))
+		req.Header.Del("Accept-Encoding")
 	}
 
 	var continueCh chan struct{}

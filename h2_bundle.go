@@ -8551,8 +8551,8 @@ func (cs *http2clientStream) writeRequest(req *Request) (err error) {
 	cc.mu.Unlock()
 
 	// TODO(bradfitz): this is a copy of the logic in net/http. Unify somewhere?
+	// Amendment: We are supporting encoding based on the header present in the request now, not just if the transport decided.
 	if !cc.t.disableCompression() &&
-		req.Header.Get("Accept-Encoding") == "" &&
 		req.Header.Get("Range") == "" &&
 		!cs.isHead {
 		// Request gzip only, not deflate. Deflate is ambiguous and
@@ -9732,11 +9732,13 @@ func (rl *http2clientConnReadLoop) handleResponse(cs *http2clientStream, f *http
 	cs.bytesRemain = res.ContentLength
 	res.Body = http2transportResponseBody{cs}
 
-	if cs.requestedGzip && http2asciiEqualFold(res.Header.Get("Content-Encoding"), "gzip") {
-		res.Header.Del("Content-Encoding")
+	// if cs.requestedGzip && http2asciiEqualFold(res.Header.Get("Content-Encoding"), "gzip") {
+	if cs.requestedGzip {
+		// res.Header.Del("Content-Encoding")
 		res.Header.Del("Content-Length")
 		res.ContentLength = -1
-		res.Body = &http2gzipReader{body: res.Body}
+		// res.Body = &http2gzipReader{body: res.Body}
+		res.Body, err = decompressReader(res.Body, rl.cc.t.t1.DecompressionFactories, strings.Split(res.Header.Get("Content-Encoding"), ","))
 		res.Uncompressed = true
 	}
 	return res, nil
