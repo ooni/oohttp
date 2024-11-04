@@ -306,6 +306,8 @@ type Transport struct {
 
 	// increment to send in the WINDOW_UPDATE frame.
 	WindowUpdateIncrement uint32
+
+	PostHandshakeCallback func(string, *tls.ConnectionState) error
 }
 
 type HTTP2PriorityFrameSettings struct {
@@ -1635,11 +1637,14 @@ func (t *Transport) dialConn(ctx context.Context, cm connectMethod) (pconn *pers
 	}
 	if cm.scheme() == "https" && t.hasCustomTLSDialer() {
 		var err error
+		fmt.Println("custom dialer")
 		pconn.conn, err = t.customDialTLS(ctx, "tcp", cm.addr())
 		if err != nil {
 			return nil, wrapErr(err)
 		}
+		fmt.Println(reflect.TypeOf(pconn.conn))
 		if tc, ok := pconn.conn.(TLSConn); ok {
+			fmt.Println("Shaking hands")
 			// Handshake here, in case DialTLS didn't. TLSNextProto below
 			// depends on it for knowing the connection state.
 			if trace != nil && trace.TLSHandshakeStart != nil {
@@ -1653,6 +1658,7 @@ func (t *Transport) dialConn(ctx context.Context, cm connectMethod) (pconn *pers
 				return nil, err
 			}
 			cs := tc.ConnectionState()
+			fmt.Println("Shook hands")
 			if trace != nil && trace.TLSHandshakeDone != nil {
 				trace.TLSHandshakeDone(cs, nil)
 			}
@@ -1671,6 +1677,13 @@ func (t *Transport) dialConn(ctx context.Context, cm connectMethod) (pconn *pers
 			}
 			if err = pconn.addTLS(ctx, firstTLSHost, trace); err != nil {
 				return nil, wrapErr(err)
+			}
+
+			// Callback to add certificate Pinning feature
+			if t.PostHandshakeCallback != nil {
+				if err = t.PostHandshakeCallback(firstTLSHost, pconn.tlsState); err != nil {
+					return nil, fmt.Errorf("oohttp: t.PostHandshakeCallback: %w", err)
+				}
 			}
 		}
 	}
