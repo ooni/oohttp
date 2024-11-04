@@ -17,7 +17,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/ooni/oohttp/internal/ascii"
 	"io"
 	"log"
 	"net"
@@ -2646,8 +2645,8 @@ func (pc *persistConn) roundTrip(req *transportRequest) (resp *Response, err err
 		// anyway. See https://golang.org/issue/8923
 
 		// Default std lib behavior is to default to gzip
-		if ascii.EqualFold(resp.Header.Get("Content-Encoding"), "") {
-			resp.Header.Set("Content-Encoding", "gzip")
+		if req.Header.Get("Accept-Encoding") == "" {
+			req.Header.Set("Accept-Encoding", "gzip")
 		}
 
 		requestedGzip = true
