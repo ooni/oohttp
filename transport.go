@@ -29,7 +29,6 @@ import (
 	"time"
 
 	httptrace "github.com/ooni/oohttp/httptrace"
-	ascii "github.com/ooni/oohttp/internal/ascii"
 	"golang.org/x/net/http/httpguts"
 	"golang.org/x/net/http/httpproxy"
 )
@@ -191,7 +190,9 @@ type Transport struct {
 	// decoded in the Response.Body. However, if the user
 	// explicitly requested gzip it is not automatically
 	// uncompressed.
-	DisableCompression bool
+	DisableCompression     bool
+	CompressionFactories   map[string]CompressionFactory
+	DecompressionFactories map[string]DecompressionFactory
 
 	// MaxIdleConns controls the maximum number of idle (keep-alive)
 	// connections across all hosts. Zero means no limit.
@@ -292,6 +293,32 @@ type Transport struct {
 	// DialTLSContext function, you'll completely bypass this
 	// per-Transport-or-global TLSClientFactory mechanism.)
 	TLSClientFactory func(conn net.Conn, config *tls.Config) TLSConn
+
+	HasCustomInitialSettings bool
+	HasCustomWindowUpdate    bool
+
+	HTTP2PriorityFrameSettings *HTTP2PriorityFrameSettings
+
+	// HTTP2SettingsFrameParameters contains all the parameters you can send in the SETTINGS frame.
+	// The index + 1 is equal to the parameter ID so index 0 would control HEADER_TABLE_SIZE etc
+	// If the value is -1 or larger than the max size of uint32, it will NOT be sent. Not all browsers send all frames.
+	HTTP2SettingsFrameParameters []int64
+
+	// increment to send in the WINDOW_UPDATE frame.
+	WindowUpdateIncrement uint32
+
+	PostHandshakeCallback func(string, *tls.ConnectionState) error
+}
+
+type HTTP2PriorityFrameSettings struct {
+	PriorityFrames []*HTTP2Priority
+	HeaderFrame    *HTTP2Priority
+}
+
+type HTTP2Priority struct {
+	StreamDep uint32
+	Exclusive bool
+	Weight    uint8
 }
 
 // A cancelKey is the key of the reqCanceler map.
@@ -299,6 +326,10 @@ type Transport struct {
 // not any transient one created by roundTrip.
 type cancelKey struct {
 	req *Request
+}
+
+func (t *Transport) EnableCustomInitialSettings() {
+	t.HasCustomInitialSettings = true
 }
 
 func (t *Transport) writeBufferSize() int {
@@ -319,28 +350,31 @@ func (t *Transport) readBufferSize() int {
 func (t *Transport) Clone() *Transport {
 	t.nextProtoOnce.Do(t.onceSetNextProtoDefaults)
 	t2 := &Transport{
-		Proxy:                  t.Proxy,
-		OnProxyConnectResponse: t.OnProxyConnectResponse,
-		DialContext:            t.DialContext,
-		Dial:                   t.Dial,
-		DialTLS:                t.DialTLS,
-		DialTLSContext:         t.DialTLSContext,
-		TLSHandshakeTimeout:    t.TLSHandshakeTimeout,
-		DisableKeepAlives:      t.DisableKeepAlives,
-		DisableCompression:     t.DisableCompression,
-		MaxIdleConns:           t.MaxIdleConns,
-		MaxIdleConnsPerHost:    t.MaxIdleConnsPerHost,
-		MaxConnsPerHost:        t.MaxConnsPerHost,
-		IdleConnTimeout:        t.IdleConnTimeout,
-		ResponseHeaderTimeout:  t.ResponseHeaderTimeout,
-		ExpectContinueTimeout:  t.ExpectContinueTimeout,
-		ProxyConnectHeader:     t.ProxyConnectHeader.Clone(),
-		GetProxyConnectHeader:  t.GetProxyConnectHeader,
-		MaxResponseHeaderBytes: t.MaxResponseHeaderBytes,
-		ForceAttemptHTTP2:      t.ForceAttemptHTTP2,
-		WriteBufferSize:        t.WriteBufferSize,
-		ReadBufferSize:         t.ReadBufferSize,
-		TLSClientFactory:       t.TLSClientFactory,
+		Proxy:                    t.Proxy,
+		OnProxyConnectResponse:   t.OnProxyConnectResponse,
+		DialContext:              t.DialContext,
+		Dial:                     t.Dial,
+		DialTLS:                  t.DialTLS,
+		DialTLSContext:           t.DialTLSContext,
+		TLSHandshakeTimeout:      t.TLSHandshakeTimeout,
+		DisableKeepAlives:        t.DisableKeepAlives,
+		DisableCompression:       t.DisableCompression,
+		MaxIdleConns:             t.MaxIdleConns,
+		MaxIdleConnsPerHost:      t.MaxIdleConnsPerHost,
+		MaxConnsPerHost:          t.MaxConnsPerHost,
+		IdleConnTimeout:          t.IdleConnTimeout,
+		ResponseHeaderTimeout:    t.ResponseHeaderTimeout,
+		ExpectContinueTimeout:    t.ExpectContinueTimeout,
+		ProxyConnectHeader:       t.ProxyConnectHeader.Clone(),
+		GetProxyConnectHeader:    t.GetProxyConnectHeader,
+		MaxResponseHeaderBytes:   t.MaxResponseHeaderBytes,
+		ForceAttemptHTTP2:        t.ForceAttemptHTTP2,
+		WriteBufferSize:          t.WriteBufferSize,
+		ReadBufferSize:           t.ReadBufferSize,
+		TLSClientFactory:         t.TLSClientFactory,
+		HasCustomInitialSettings: t.HasCustomInitialSettings,
+		HasCustomWindowUpdate:    t.HasCustomWindowUpdate,
+		WindowUpdateIncrement:    t.WindowUpdateIncrement,
 	}
 	if t.TLSClientConfig != nil {
 		t2.TLSClientConfig = t.TLSClientConfig.Clone()
@@ -529,6 +563,10 @@ func (t *Transport) roundTrip(req *Request) (*Response, error) {
 	if isHTTP {
 		for k, vv := range req.Header {
 			if !httpguts.ValidHeaderFieldName(k) {
+				// Allow the HeaderOrderKey and PHeaderOrderKey magic string, this will be handled further.
+				if k == HeaderOrderKey || k == PHeaderOrderKey {
+					continue
+				}
 				req.closeBody()
 				return nil, fmt.Errorf("net/http: invalid header field name %q", k)
 			}
@@ -1599,11 +1637,14 @@ func (t *Transport) dialConn(ctx context.Context, cm connectMethod) (pconn *pers
 	}
 	if cm.scheme() == "https" && t.hasCustomTLSDialer() {
 		var err error
+		fmt.Println("custom dialer")
 		pconn.conn, err = t.customDialTLS(ctx, "tcp", cm.addr())
 		if err != nil {
 			return nil, wrapErr(err)
 		}
+		fmt.Println(reflect.TypeOf(pconn.conn))
 		if tc, ok := pconn.conn.(TLSConn); ok {
+			fmt.Println("Shaking hands")
 			// Handshake here, in case DialTLS didn't. TLSNextProto below
 			// depends on it for knowing the connection state.
 			if trace != nil && trace.TLSHandshakeStart != nil {
@@ -1617,6 +1658,7 @@ func (t *Transport) dialConn(ctx context.Context, cm connectMethod) (pconn *pers
 				return nil, err
 			}
 			cs := tc.ConnectionState()
+			fmt.Println("Shook hands")
 			if trace != nil && trace.TLSHandshakeDone != nil {
 				trace.TLSHandshakeDone(cs, nil)
 			}
@@ -1635,6 +1677,13 @@ func (t *Transport) dialConn(ctx context.Context, cm connectMethod) (pconn *pers
 			}
 			if err = pconn.addTLS(ctx, firstTLSHost, trace); err != nil {
 				return nil, wrapErr(err)
+			}
+
+			// Callback to add certificate Pinning feature
+			if t.PostHandshakeCallback != nil {
+				if err = t.PostHandshakeCallback(firstTLSHost, pconn.tlsState); err != nil {
+					return nil, fmt.Errorf("oohttp: t.PostHandshakeCallback: %w", err)
+				}
 			}
 		}
 	}
@@ -1757,6 +1806,13 @@ func (t *Transport) dialConn(ctx context.Context, cm connectMethod) (pconn *pers
 	if cm.proxyURL != nil && cm.targetScheme == "https" {
 		if err := pconn.addTLS(ctx, cm.tlsHost(), trace); err != nil {
 			return nil, err
+		}
+
+		// Callback to add certificate Pinning feature
+		if t.PostHandshakeCallback != nil {
+			if err = t.PostHandshakeCallback(cm.tlsHost(), pconn.tlsState); err != nil {
+				return nil, fmt.Errorf("oohttp: t.PostHandshakeCallback: %w", err)
+			}
 		}
 	}
 
@@ -2219,9 +2275,16 @@ func (pc *persistConn) readLoop() {
 		}
 
 		resp.Body = body
-		if rc.addedGzip && ascii.EqualFold(resp.Header.Get("Content-Encoding"), "gzip") {
-			resp.Body = &gzipReader{body: body}
-			resp.Header.Del("Content-Encoding")
+
+		//if rc.addedGzip && ascii.EqualFold(resp.Header.Get("Content-Encoding"), "gzip") {
+		// fmt.Println("Check decompression", rc.addedGzip)
+		if rc.addedGzip {
+			resp.Body, err = decompressReader(body, pc.t.DecompressionFactories, strings.Split(resp.Header.Get("Content-Encoding"), ","))
+			if err != nil {
+				panic(err)
+			}
+			// resp.Body = &gzipReader{body: body}
+			// resp.Header.Del("Content-Encoding")
 			resp.Header.Del("Content-Length")
 			resp.ContentLength = -1
 			resp.Uncompressed = true
@@ -2583,9 +2646,9 @@ func (pc *persistConn) roundTrip(req *transportRequest) (resp *Response, err err
 	// own value for Accept-Encoding. We only attempt to
 	// uncompress the gzip stream if we were the layer that
 	// requested it.
+	// Amendment: We are supporting encoding based on the header present in the request now, not just if the transport decided.
 	requestedGzip := false
 	if !pc.t.DisableCompression &&
-		req.Header.Get("Accept-Encoding") == "" &&
 		req.Header.Get("Range") == "" &&
 		req.Method != "HEAD" {
 		// Request gzip only, not deflate. Deflate is ambiguous and
@@ -2600,8 +2663,15 @@ func (pc *persistConn) roundTrip(req *transportRequest) (resp *Response, err err
 		// We don't request gzip if the request is for a range, since
 		// auto-decoding a portion of a gzipped document will just fail
 		// anyway. See https://golang.org/issue/8923
+
+		// Default std lib behavior is to default to gzip
+		if req.Header.Get("Accept-Encoding") == "" {
+			req.Header.Set("Accept-Encoding", "gzip")
+		}
+
 		requestedGzip = true
-		req.extraHeaders().Set("Accept-Encoding", "gzip")
+		req.extraHeaders().Set("Accept-Encoding", req.Header.Get("Accept-Encoding"))
+		req.Header.Del("Accept-Encoding")
 	}
 
 	var continueCh chan struct{}
