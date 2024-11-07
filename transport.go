@@ -1680,6 +1680,7 @@ func (t *Transport) dialConn(ctx context.Context, cm connectMethod) (pconn *pers
 			}
 
 			// Callback to add certificate Pinning feature
+			fmt.Println("POST HANDSHAKE")
 			if t.PostHandshakeCallback != nil {
 				if err = t.PostHandshakeCallback(firstTLSHost, pconn.tlsState); err != nil {
 					return nil, fmt.Errorf("oohttp: t.PostHandshakeCallback: %w", err)
@@ -1806,6 +1807,13 @@ func (t *Transport) dialConn(ctx context.Context, cm connectMethod) (pconn *pers
 	if cm.proxyURL != nil && cm.targetScheme == "https" {
 		if err := pconn.addTLS(ctx, cm.tlsHost(), trace); err != nil {
 			return nil, err
+		}
+
+		// Callback to add certificate Pinning feature
+		if t.PostHandshakeCallback != nil {
+			if err = t.PostHandshakeCallback(cm.tlsHost(), pconn.tlsState); err != nil {
+				return nil, fmt.Errorf("oohttp: t.PostHandshakeCallback: %w", err)
+			}
 		}
 	}
 
