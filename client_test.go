@@ -61,13 +61,6 @@ func pedanticReadAll(r io.Reader) (b []byte, err error) {
 	}
 }
 
-type chanWriter chan string
-
-func (w chanWriter) Write(p []byte) (n int, err error) {
-	w <- string(p)
-	return len(p), nil
-}
-
 func TestClient(t *testing.T) { run(t, testClient) }
 func testClient(t *testing.T, mode testMode) {
 	ts := newClientServerTest(t, mode, robotsTxtHandler).ts
@@ -828,12 +821,12 @@ func TestClientInsecureTransport(t *testing.T) {
 	run(t, testClientInsecureTransport, []testMode{https1Mode, http2Mode})
 }
 func testClientInsecureTransport(t *testing.T, mode testMode) {
-	ts := newClientServerTest(t, mode, HandlerFunc(func(w ResponseWriter, r *Request) {
+	cst := newClientServerTest(t, mode, HandlerFunc(func(w ResponseWriter, r *Request) {
 		w.Write([]byte("Hello"))
-	})).ts
-	errc := make(chanWriter, 10) // but only expecting 1
-	ts.Config.ErrorLog = log.New(errc, "", 0)
-	defer ts.Close()
+	}))
+	ts := cst.ts
+	errLog := new(strings.Builder)
+	ts.Config.ErrorLog = log.New(errLog, "", 0)
 
 	// TODO(bradfitz): add tests for skipping hostname checks too?
 	// would require a new cert for testing, and probably
@@ -852,15 +845,10 @@ func testClientInsecureTransport(t *testing.T, mode testMode) {
 		}
 	}
 
-	select {
-	case v := <-errc:
-		if !strings.Contains(v, "TLS handshake error") {
-			t.Errorf("expected an error log message containing 'TLS handshake error'; got %q", v)
-		}
-	case <-time.After(5 * time.Second):
-		t.Errorf("timeout waiting for logged error")
+	cst.close()
+	if !strings.Contains(errLog.String(), "TLS handshake error") {
+		t.Errorf("expected an error log message containing 'TLS handshake error'; got %q", errLog)
 	}
-
 }
 
 func TestClientErrorWithRequestURI(t *testing.T) {
@@ -898,9 +886,10 @@ func TestClientWithIncorrectTLSServerName(t *testing.T) {
 	run(t, testClientWithIncorrectTLSServerName, []testMode{https1Mode, http2Mode})
 }
 func testClientWithIncorrectTLSServerName(t *testing.T, mode testMode) {
-	ts := newClientServerTest(t, mode, HandlerFunc(func(w ResponseWriter, r *Request) {})).ts
-	errc := make(chanWriter, 10) // but only expecting 1
-	ts.Config.ErrorLog = log.New(errc, "", 0)
+	cst := newClientServerTest(t, mode, HandlerFunc(func(w ResponseWriter, r *Request) {}))
+	ts := cst.ts
+	errLog := new(strings.Builder)
+	ts.Config.ErrorLog = log.New(errLog, "", 0)
 
 	c := ts.Client()
 	c.Transport.(*Transport).TLSClientConfig.ServerName = "badserver"
@@ -911,13 +900,10 @@ func testClientWithIncorrectTLSServerName(t *testing.T, mode testMode) {
 	if !strings.Contains(err.Error(), "127.0.0.1") || !strings.Contains(err.Error(), "badserver") {
 		t.Errorf("wanted error mentioning 127.0.0.1 and badserver; got error: %v", err)
 	}
-	select {
-	case v := <-errc:
-		if !strings.Contains(v, "TLS handshake error") {
-			t.Errorf("expected an error log message containing 'TLS handshake error'; got %q", v)
-		}
-	case <-time.After(5 * time.Second):
-		t.Errorf("timeout waiting for logged error")
+
+	cst.close()
+	if !strings.Contains(errLog.String(), "TLS handshake error") {
+		t.Errorf("expected an error log message containing 'TLS handshake error'; got %q", errLog)
 	}
 }
 
@@ -961,7 +947,7 @@ func testResponseSetsTLSConnectionState(t *testing.T, mode testMode) {
 
 	c := ts.Client()
 	tr := c.Transport.(*Transport)
-	tr.TLSClientConfig.CipherSuites = []uint16{tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA}
+	tr.TLSClientConfig.CipherSuites = []uint16{tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA}
 	tr.TLSClientConfig.MaxVersion = tls.VersionTLS12 // to get to pick the cipher suite
 	tr.Dial = func(netw, addr string) (net.Conn, error) {
 		return net.Dial(netw, ts.Listener.Addr().String())
@@ -974,7 +960,7 @@ func testResponseSetsTLSConnectionState(t *testing.T, mode testMode) {
 	if res.TLS == nil {
 		t.Fatal("Response didn't set TLS Connection State.")
 	}
-	if got, want := res.TLS.CipherSuite, tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA; got != want {
+	if got, want := res.TLS.CipherSuite, tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA; got != want {
 		t.Errorf("TLS Cipher Suite = %d; want %d", got, want)
 	}
 }
