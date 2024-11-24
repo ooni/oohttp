@@ -7,12 +7,13 @@ package cgi
 import (
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path"
 	"sort"
 	"strings"
 	"time"
+
+	http "github.com/ooni/oohttp"
 )
 
 func cgiMain() {

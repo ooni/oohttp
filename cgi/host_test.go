@@ -9,7 +9,6 @@ package cgi
 import (
 	"bufio"
 	"fmt"
-	"internal/testenv"
 	"io"
 	"net"
 	"os"
@@ -23,6 +22,7 @@ import (
 
 	http "github.com/ooni/oohttp"
 	httptest "github.com/ooni/oohttp/httptest"
+	testenv "github.com/ooni/oohttp/internal/testenv"
 )
 
 // TestMain executes the test binary as the cgi server if

@@ -11,11 +11,12 @@ package http
 // they mostly involve renaming functions, usually by unexporting them.
 
 import (
-	"internal/godebug"
 	"net/url"
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/ooni/oohttp/internal/godebug"
 )
 
 var httpmuxgo121 = godebug.New("httpmuxgo121")
