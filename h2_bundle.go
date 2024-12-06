@@ -9738,7 +9738,7 @@ func (rl *http2clientConnReadLoop) handleResponse(cs *http2clientStream, f *http
 		res.Header.Del("Content-Length")
 		res.ContentLength = -1
 		// res.Body = &http2gzipReader{body: res.Body}
-		res.Body= &DecompressorReader{
+		res.Body = &DecompressorReader{
 			Reader: res.Body,
 			Registry: rl.cc.t.t1.DecompressionRegistry,
 			Order: strings.Split(res.Header.Get("Content-Encoding"), ","),
