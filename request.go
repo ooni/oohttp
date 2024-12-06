@@ -676,17 +676,16 @@ func (r *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, waitF
 		return err
 	}
 
+	// Make sure can be ordered too Accept-Encoding, Connection
+	if extraHeaders != nil {
+		for key, values := range extraHeaders {
+			r.Header[key] = values
+		}
+	}
+
 	err = r.Header.write(w, trace)
 	if err != nil {
 		return err
-	}
-
-	// Make sure can be ordered too Accept-Encoding, Connection
-	if extraHeaders != nil {
-		err = extraHeaders.write(w, trace)
-		if err != nil {
-			return err
-		}
 	}
 
 	_, err = io.WriteString(w, "\r\n")
