@@ -190,9 +190,9 @@ type Transport struct {
 	// decoded in the Response.Body. However, if the user
 	// explicitly requested gzip it is not automatically
 	// uncompressed.
-	DisableCompression     bool
-	CompressionFactories   map[string]CompressionFactory
-	DecompressionFactories map[string]DecompressionFactory
+	DisableCompression    bool
+	CompressionRegistry   CompressionRegistry
+	DecompressionRegistry DecompressionRegistry
 
 	// MaxIdleConns controls the maximum number of idle (keep-alive)
 	// connections across all hosts. Zero means no limit.
@@ -2279,12 +2279,13 @@ func (pc *persistConn) readLoop() {
 		//if rc.addedGzip && ascii.EqualFold(resp.Header.Get("Content-Encoding"), "gzip") {
 		// fmt.Println("Check decompression", rc.addedGzip)
 		if rc.addedGzip {
-			resp.Body, err = decompressReader(body, pc.t.DecompressionFactories, strings.Split(resp.Header.Get("Content-Encoding"), ","))
-			if err != nil {
-				panic(err)
+			resp.Body = &DecompressorReader{
+				Reader:   resp.Body,
+				Registry: pc.t.DecompressionRegistry,
+				Order:    strings.Split(resp.Header.Get("Content-Encoding"), ","),
 			}
 			// resp.Body = &gzipReader{body: body}
-			// resp.Header.Del("Content-Encoding")
+			resp.Header.Del("Content-Encoding")
 			resp.Header.Del("Content-Length")
 			resp.ContentLength = -1
 			resp.Uncompressed = true

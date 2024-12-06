@@ -8,16 +8,24 @@ import (
 	"compress/zlib"
 	"errors"
 	"fmt"
+	"io"
+	"strings"
+	"sync"
+
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/zstd"
-	"io"
 )
 
 type CompressionFactory func(writer io.Writer) (io.Writer, error)
 type DecompressionFactory func(reader io.Reader) (io.Reader, error)
 
+type EncodingName = string
+
+type CompressionRegistry map[EncodingName]CompressionFactory
+type DecompressionRegistry map[EncodingName]DecompressionFactory
+
 var (
-	defaultCompressionFactories = map[string]CompressionFactory{
+	DefaultCompressionRegistry = CompressionRegistry{
 		"":         func(writer io.Writer) (io.Writer, error) { return writer, nil },
 		"identity": func(writer io.Writer) (io.Writer, error) { return writer, nil },
 		"gzip":     func(writer io.Writer) (io.Writer, error) { return gzip.NewWriter(writer), nil },
@@ -29,7 +37,7 @@ var (
 		"zstd":     func(writer io.Writer) (io.Writer, error) { return zstd.NewWriter(writer) },
 	}
 
-	defaultDecompressionFactories = map[string]DecompressionFactory{
+	DefaultDecompressionRegistry = DecompressionRegistry{
 		"":         func(reader io.Reader) (io.Reader, error) { return reader, nil },
 		"identity": func(reader io.Reader) (io.Reader, error) { return reader, nil },
 		"gzip":     func(reader io.Reader) (io.Reader, error) { return gzip.NewReader(reader) },
@@ -41,23 +49,23 @@ var (
 	}
 )
 
-func compress(data []byte, compressions map[string]CompressionFactory, compressionOrder ...string) ([]byte, error) {
+func compress(data []byte, registry CompressionRegistry, order ...EncodingName) ([]byte, error) {
 	var (
 		err     error
 		writers []io.Writer
 		writer  io.Writer
 	)
 
-	if compressions == nil {
-		compressions = defaultCompressionFactories
+	if registry == nil {
+		registry = DefaultCompressionRegistry
 	}
 
 	dst := bytes.NewBuffer(nil)
 	writer = dst
 
-	for idx, compression := range compressionOrder {
+	for idx, compression := range order {
 		// fmt.Println(fmt.Sprintf("Compression added: %s", compression))
-		mapping, ok := compressions[compression]
+		mapping, ok := registry[compression]
 		if !ok {
 			return nil, errors.New(compression + " is not supported")
 		}
@@ -86,15 +94,87 @@ func compress(data []byte, compressions map[string]CompressionFactory, compressi
 	return dst.Bytes(), nil
 }
 
-func decompress(data []byte, compressions map[string]DecompressionFactory, compressionOrder ...string) ([]byte, error) {
+// CompressorWriter compressor writer
+type CompressorWriter struct {
+	io.Writer
+
+	Registry CompressionRegistry
+	Order    []EncodingName
+
+	wrs []io.Writer
+
+	once sync.Once
+}
+
+var _ io.WriteCloser = (*CompressorWriter)(nil)
+
+func (cw *CompressorWriter) init() error {
+	if cw.Registry == nil {
+		cw.Registry = DefaultCompressionRegistry
+	}
+	cw.wrs = nil
+	for i := 0; i < len(cw.Order); i++ {
+		directive := cw.Order[i]
+		directive = strings.Trim(directive, " ")
+		if directive == "" {
+			continue
+		}
+		compressorWrapper, exist := cw.Registry[directive]
+		if !exist {
+			return fmt.Errorf("%s is not supported", directive)
+		}
+		writer, err := compressorWrapper(cw.Writer)
+		if err != nil {
+			return fmt.Errorf("compressor wrapper init: %s: %w", directive, err)
+		}
+		cw.wrs = append(cw.wrs, writer)
+		cw.Writer = writer
+	}
+	return nil
+}
+
+// Init initialize decompressor early instead of lazy-initialize on first read op
+func (cw *CompressorWriter) Init() (err error) {
+	cw.once.Do(func() {
+		err = cw.init()
+	})
+	return
+}
+
+// Write write buffer to compressor
+func (cw *CompressorWriter) Write(b []byte) (nb int, err error) {
+	cw.once.Do(func() {
+		err = cw.init()
+	})
+	if err != nil {
+		return
+	}
+	nb, err = cw.Writer.Write(b)
+	return
+}
+
+// Close close compressor
+func (cw *CompressorWriter) Close() error {
+	for i := len(cw.wrs) - 1; i >= 0; i-- {
+		if closer, ok := cw.wrs[i].(io.Closer); ok {
+			err := closer.Close()
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func decompress(data []byte, registry DecompressionRegistry, order ...EncodingName) ([]byte, error) {
 	var (
 		err     error
 		reader  io.Reader
 		readers []io.Reader
 	)
 
-	if compressions == nil {
-		compressions = defaultDecompressionFactories
+	if registry == nil {
+		registry = DefaultDecompressionRegistry
 	}
 
 	src := bytes.NewBuffer(data)
@@ -103,10 +183,10 @@ func decompress(data []byte, compressions map[string]DecompressionFactory, compr
 	readers = append(readers, src)
 
 	// Reverse the order of compressions for decompression
-	for idx := 0; idx < len(compressionOrder); idx++ {
-		compression := compressionOrder[idx]
+	for idx := 0; idx < len(order); idx++ {
+		compression := order[idx]
 		// fmt.Println(fmt.Sprintf("Decompression added: %s", compression))
-		mapping, ok := compressions[compression]
+		mapping, ok := registry[compression]
 		if !ok {
 			return nil, errors.New(compression + " is not supported")
 		}
@@ -134,57 +214,71 @@ func decompress(data []byte, compressions map[string]DecompressionFactory, compr
 	return dataOut, nil
 }
 
-func decompressReader(src io.Reader, compressions map[string]DecompressionFactory, compressionOrder []string) (io.ReadCloser, error) {
-	var (
-		err error
-	)
+// DecompressorReader decompressor reader
+type DecompressorReader struct {
+	io.Reader
 
-	if compressions == nil {
-		compressions = defaultDecompressionFactories
+	Registry DecompressionRegistry
+	Order    []EncodingName
+
+	rds []io.Reader
+
+	once sync.Once
+}
+
+var _ io.ReadCloser = (*DecompressorReader)(nil)
+
+func (dr *DecompressorReader) init() error {
+	if dr.Registry == nil {
+		dr.Registry = DefaultDecompressionRegistry
 	}
-
-	result := &bodyDecompressorReader{
-		reader:           src,
-		CompressionOrder: compressionOrder,
-	}
-
-	result.readers = append(result.readers, result.reader)
-
-	// Reverse the order of compressions for decompression
-	for idx := 0; idx < len(compressionOrder); idx++ {
-		compression := compressionOrder[idx]
-		// fmt.Println(fmt.Sprintf("Decompression added: %s", compression))
-		mapping, ok := compressions[compression]
-		if !ok {
-			return nil, errors.New(compression + " is not supported")
+	dr.rds = nil
+	for i := 0; i < len(dr.Order); i++ {
+		directive := dr.Order[i]
+		directive = strings.Trim(directive, " ")
+		if directive == "" {
+			continue
 		}
-		result.reader, err = mapping(result.reader)
+		// fmt.Println(directive)
+		decompressorWrapper, exist := dr.Registry[directive]
+		if !exist {
+			return fmt.Errorf("%s is not supported", directive)
+		}
+		reader, err := decompressorWrapper(dr.Reader)
 		if err != nil {
-			return nil, fmt.Errorf("mapping[%d:%s]: %w", idx, compression, err)
+			return fmt.Errorf("decompressor wrapper init: %s: %w", directive, err)
 		}
-
-		result.readers = append(result.readers, result.reader)
+		dr.rds = append(dr.rds, reader)
+		dr.Reader = reader
 	}
-
-	return result, nil
+	return nil
 }
 
-type bodyDecompressorReader struct {
-	reader           io.Reader
-	readers          []io.Reader
-	Factory          map[string]DecompressionFactory
-	CompressionOrder []string
+// Init initialize decompressor early instead of lazy-initialize on first read op
+func (dr *DecompressorReader) Init() (err error) {
+	dr.once.Do(func() {
+		err = dr.init()
+	})
+	return
 }
 
-func (body *bodyDecompressorReader) Read(p []byte) (n int, err error) {
-	return body.reader.Read(p)
+// Read read buffer from decompressor
+func (dr *DecompressorReader) Read(b []byte) (nb int, err error) {
+	dr.once.Do(func() {
+		err = dr.init()
+	})
+	if err != nil {
+		return
+	}
+	nb, err = dr.Reader.Read(b)
+	return
 }
 
-func (body *bodyDecompressorReader) Close() error {
-	for _, readerObj := range body.readers {
-		typedReader, ok := readerObj.(io.Closer)
-		if ok {
-			err := typedReader.Close()
+// Close close decompressor
+func (dr *DecompressorReader) Close() error {
+	for i := len(dr.rds) - 1; i >= 0; i-- {
+		if closer, ok := dr.rds[i].(io.Closer); ok {
+			err := closer.Close()
 			if err != nil {
 				return err
 			}
