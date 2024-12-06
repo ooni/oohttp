@@ -14,7 +14,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/ooni/oohttp/textproto"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -23,6 +22,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/ooni/oohttp/textproto"
 
 	httptrace "github.com/ooni/oohttp/httptrace"
 	ascii "github.com/ooni/oohttp/internal/ascii"
@@ -682,8 +683,9 @@ func (r *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, waitF
 
 	// Make sure can be ordered too Accept-Encoding, Connection
 	if extraHeaders != nil {
-		for key, values := range extraHeaders {
-			r.Header[key] = values
+		err = extraHeaders.write(w, trace)
+		if err != nil {
+			return err
 		}
 	}
 

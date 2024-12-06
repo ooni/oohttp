@@ -2665,14 +2665,17 @@ func (pc *persistConn) roundTrip(req *transportRequest) (resp *Response, err err
 		// auto-decoding a portion of a gzipped document will just fail
 		// anyway. See https://golang.org/issue/8923
 
-		// Default std lib behavior is to default to gzip
-		if req.Header.Get("Accept-Encoding") == "" {
-			req.Header.Set("Accept-Encoding", "gzip")
+		// Leave control to the user
+		if req.Header.has("Accept-Encoding") {
+			// Default std lib behavior is to default to gzip
+			if req.Header.Get("Accept-Encoding") == "" {
+				req.Header.Set("Accept-Encoding", "gzip")
+			}
 		}
 
 		requestedGzip = true
 		req.extraHeaders().Set("Accept-Encoding", req.Header.Get("Accept-Encoding"))
-		req.Header.Del("Accept-Encoding")
+		req.Header.Del("Accept-Encoding") // dedup
 	}
 
 	var continueCh chan struct{}
