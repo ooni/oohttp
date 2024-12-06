@@ -138,7 +138,7 @@ func Test_Sanity(t *testing.T) {
 
 	// Compress using multiple algorithms
 	compressions := []string{"gzip", "deflate", "br", "zstd"}
-	dataCompressed, err := compress(data, DefaultCompressionFactories, compressions...)
+	dataCompressed, err := compress(data, DefaultCompressionRegistry, compressions...)
 	if err != nil {
 		t.Fatalf("compress: %v", err)
 	}
@@ -147,7 +147,7 @@ func Test_Sanity(t *testing.T) {
 	fmt.Println("Compressed Data (Base64):", base64.StdEncoding.EncodeToString(dataCompressed))
 
 	// Decompress using the same algorithms
-	dataUncompressed, err := decompress(dataCompressed, DefaultDecompressionFactories, compressions...)
+	dataUncompressed, err := decompress(dataCompressed, DefaultDecompressionRegistry, compressions...)
 	if err != nil {
 		t.Fatalf("decompress: %v", err)
 	}

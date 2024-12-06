@@ -25,7 +25,7 @@ type CompressionRegistry map[EncodingName]CompressionFactory
 type DecompressionRegistry map[EncodingName]DecompressionFactory
 
 var (
-	DefaultCompressionFactories = CompressionRegistry{
+	DefaultCompressionRegistry = CompressionRegistry{
 		"":         func(writer io.Writer) (io.Writer, error) { return writer, nil },
 		"identity": func(writer io.Writer) (io.Writer, error) { return writer, nil },
 		"gzip":     func(writer io.Writer) (io.Writer, error) { return gzip.NewWriter(writer), nil },
@@ -37,7 +37,7 @@ var (
 		"zstd":     func(writer io.Writer) (io.Writer, error) { return zstd.NewWriter(writer) },
 	}
 
-	DefaultDecompressionFactories = DecompressionRegistry{
+	DefaultDecompressionRegistry = DecompressionRegistry{
 		"":         func(reader io.Reader) (io.Reader, error) { return reader, nil },
 		"identity": func(reader io.Reader) (io.Reader, error) { return reader, nil },
 		"gzip":     func(reader io.Reader) (io.Reader, error) { return gzip.NewReader(reader) },
@@ -57,7 +57,7 @@ func compress(data []byte, registry CompressionRegistry, order ...EncodingName) 
 	)
 
 	if registry == nil {
-		registry = DefaultCompressionFactories
+		registry = DefaultCompressionRegistry
 	}
 
 	dst := bytes.NewBuffer(nil)
@@ -110,7 +110,7 @@ var _ io.WriteCloser = (*CompressorWriter)(nil)
 
 func (cw *CompressorWriter) init() error {
 	if cw.Registry == nil {
-		cw.Registry = DefaultCompressionFactories
+		cw.Registry = DefaultCompressionRegistry
 	}
 	cw.wrs = nil
 	for i := 0; i < len(cw.Order); i++ {
@@ -174,7 +174,7 @@ func decompress(data []byte, registry DecompressionRegistry, order ...EncodingNa
 	)
 
 	if registry == nil {
-		registry = DefaultDecompressionFactories
+		registry = DefaultDecompressionRegistry
 	}
 
 	src := bytes.NewBuffer(data)
@@ -230,7 +230,7 @@ var _ io.ReadCloser = (*DecompressorReader)(nil)
 
 func (dr *DecompressorReader) init() error {
 	if dr.Registry == nil {
-		dr.Registry = DefaultDecompressionFactories
+		dr.Registry = DefaultDecompressionRegistry
 	}
 	dr.rds = nil
 	for i := 0; i < len(dr.Order); i++ {
