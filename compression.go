@@ -49,7 +49,7 @@ var (
 	}
 )
 
-func compress(data []byte, registry CompressionRegistry, order ...string) ([]byte, error) {
+func compress(data []byte, registry CompressionRegistry, order ...EncodingName) ([]byte, error) {
 	var (
 		err     error
 		writers []io.Writer
@@ -99,7 +99,7 @@ type CompressorWriter struct {
 	io.Writer
 
 	Registry CompressionRegistry
-	Order    []string
+	Order    []EncodingName
 
 	wrs []io.Writer
 
@@ -166,7 +166,7 @@ func (cw *CompressorWriter) Close() error {
 	return nil
 }
 
-func decompress(data []byte, registry DecompressionRegistry, order ...string) ([]byte, error) {
+func decompress(data []byte, registry DecompressionRegistry, order ...EncodingName) ([]byte, error) {
 	var (
 		err     error
 		reader  io.Reader
@@ -219,7 +219,7 @@ type DecompressorReader struct {
 	io.Reader
 
 	Registry DecompressionRegistry
-	Order    []string
+	Order    []EncodingName
 
 	rds []io.Reader
 
