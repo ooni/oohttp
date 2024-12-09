@@ -9734,7 +9734,6 @@ func (rl *http2clientConnReadLoop) handleResponse(cs *http2clientStream, f *http
 
 	// if cs.requestedGzip && http2asciiEqualFold(res.Header.Get("Content-Encoding"), "gzip") {
 	if cs.requestedGzip {
-		res.Header.Del("Content-Encoding")
 		res.Header.Del("Content-Length")
 		res.ContentLength = -1
 		// res.Body = &http2gzipReader{body: res.Body}
@@ -9743,6 +9742,7 @@ func (rl *http2clientConnReadLoop) handleResponse(cs *http2clientStream, f *http
 			Registry: rl.cc.t.t1.DecompressionRegistry,
 			Order: strings.Split(res.Header.Get("Content-Encoding"), ","),
 		}
+		res.Header.Del("Content-Encoding")
 		res.Uncompressed = true
 	}
 	return res, nil
