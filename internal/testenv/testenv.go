@@ -37,3 +37,7 @@ func CommandContext(t testing.TB, ctx context.Context, name string, args ...stri
 	t.Skip("testenv.CommandContext is not enabled in this fork")
 	return &exec.Cmd{}
 }
+
+func Command(t testing.TB, name string, args ...string) *exec.Cmd {
+	return CommandContext(t, context.Background(), name, args...)
+}
