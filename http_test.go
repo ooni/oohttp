@@ -11,7 +11,6 @@ import (
 	"io/fs"
 	"net/url"
 	"os"
-	"os/exec"
 	"reflect"
 	"regexp"
 	"strings"
@@ -57,7 +56,7 @@ func TestCmdGoNoHTTPServer(t *testing.T) {
 	t.Skip("test disabled in the github.com/ooni/oohttp fork")
 	t.Parallel()
 	goBin := testenv.GoToolPath(t)
-	out, err := exec.Command(goBin, "tool", "nm", goBin).CombinedOutput()
+	out, err := testenv.Command(t, goBin, "tool", "nm", goBin).CombinedOutput()
 	if err != nil {
 		t.Fatalf("go tool nm: %v: %s", err, out)
 	}
@@ -92,7 +91,7 @@ func TestOmitHTTP2(t *testing.T) {
 	}
 	t.Parallel()
 	goTool := testenv.GoToolPath(t)
-	out, err := exec.Command(goTool, "test", "-short", "-tags=nethttpomithttp2", "net/http").CombinedOutput()
+	out, err := testenv.Command(t, goTool, "test", "-short", "-tags=nethttpomithttp2", "net/http").CombinedOutput()
 	if err != nil {
 		t.Fatalf("go test -short failed: %v, %s", err, out)
 	}
@@ -105,7 +104,7 @@ func TestOmitHTTP2Vet(t *testing.T) {
 	t.Skip("test disabled in the github.com/ooni/oohttp fork")
 	t.Parallel()
 	goTool := testenv.GoToolPath(t)
-	out, err := exec.Command(goTool, "vet", "-tags=nethttpomithttp2", "net/http").CombinedOutput()
+	out, err := testenv.Command(t, goTool, "vet", "-tags=nethttpomithttp2", "net/http").CombinedOutput()
 	if err != nil {
 		t.Fatalf("go vet failed: %v, %s", err, out)
 	}
