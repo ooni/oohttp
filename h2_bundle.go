@@ -1730,7 +1730,8 @@ type http2Framer struct {
 	debugReadLoggerf  func(string, ...interface{})
 	debugWriteLoggerf func(string, ...interface{})
 
-	frameCache *http2frameCache // nil if frames aren't reused (default)
+	frameCache     *http2frameCache // nil if frames aren't reused (default)
+	HeaderPriority *http2PriorityParam
 }
 
 func (fr *http2Framer) maxHeaderListSize() uint32 {
@@ -2502,6 +2503,9 @@ type http2HeadersFrameParam struct {
 // It will perform exactly one Write to the underlying Writer.
 // It is the caller's responsibility to not call other Write methods concurrently.
 func (f *http2Framer) WriteHeaders(p http2HeadersFrameParam) error {
+	if f.HeaderPriority != nil {
+		p.Priority = *f.HeaderPriority
+	}
 	if !http2validStreamID(p.StreamID) && !f.AllowIllegalWrites {
 		return http2errStreamID
 	}
@@ -3016,6 +3020,7 @@ func (fr *http2Framer) readMetaFrame(hf *http2HeadersFrame) (http2Frame, error) 
 		}
 
 		if _, err := hdec.Write(frag); err != nil {
+			fr.debugReadLoggerf("http2: hdec.Write error: (%T) %v", err, err)
 			return mh, http2ConnectionError(http2ErrCodeCompression)
 		}
 
@@ -3409,8 +3414,9 @@ const (
 	// HTTP/2's TLS setup.
 	http2NextProtoTLS = "h2"
 
+	// TODO: This has consequences, should
 	// https://httpwg.org/specs/rfc7540.html#SettingValues
-	http2initialHeaderTableSize = 4096
+	http2initialHeaderTableSize = 4096 // 65536
 
 	http2initialWindowSize = 65535 // 6.9.2 Initial Flow Control Window Size
 
@@ -7822,6 +7828,12 @@ func (t *http2Transport) maxDecoderHeaderTableSize() uint32 {
 	if v := t.MaxDecoderHeaderTableSize; v > 0 {
 		return v
 	}
+	// Needed else you may see connection error: COMPRESSION_ERROR upon hdec.Write(frag)
+	if t.t1.HTTP2SettingsFrameParameters != nil && len(t.t1.HTTP2SettingsFrameParameters) > 0 {
+		if t.t1.HTTP2SettingsFrameParameters[0] > 1 && t.t1.HTTP2SettingsFrameParameters[0] < 4294967295 {
+			return uint32(t.t1.HTTP2SettingsFrameParameters[0])
+		}
+	}
 	return http2initialHeaderTableSize
 }
 
@@ -7895,23 +7907,65 @@ func (t *http2Transport) newClientConn(c net.Conn, singleUse bool) (*http2Client
 		cc.tlsState = &state
 	}
 
-	initialSettings := []http2Setting{
-		{ID: http2SettingEnablePush, Val: 0},
-		{ID: http2SettingInitialWindowSize, Val: http2transportDefaultStreamFlow},
+	var initialSettings []http2Setting
+	if t.t1.HasCustomInitialSettings {
+		for id, value := range t.t1.HTTP2SettingsFrameParameters {
+			if value < 0 || value > 4294967295 {
+				// Skip because value is invalid
+				continue
+			}
+			initialSettings = append(initialSettings, http2Setting{ID: http2SettingID(id + 1), Val: uint32(value)})
+		}
+	} else {
+		initialSettings = []http2Setting{
+			{ID: http2SettingEnablePush, Val: 0},
+			{ID: http2SettingInitialWindowSize, Val: http2transportDefaultStreamFlow},
+		}
+		if max := t.maxFrameReadSize(); max != 0 {
+			initialSettings = append(initialSettings, http2Setting{ID: http2SettingMaxFrameSize, Val: max})
+		}
+		if max := t.maxHeaderListSize(); max != 0 {
+			initialSettings = append(initialSettings, http2Setting{ID: http2SettingMaxHeaderListSize, Val: max})
+		}
+		if maxHeaderTableSize != http2initialHeaderTableSize {
+			initialSettings = append(initialSettings, http2Setting{ID: http2SettingHeaderTableSize, Val: maxHeaderTableSize})
+		}
 	}
-	if max := t.maxFrameReadSize(); max != 0 {
-		initialSettings = append(initialSettings, http2Setting{ID: http2SettingMaxFrameSize, Val: max})
-	}
-	if max := t.maxHeaderListSize(); max != 0 {
-		initialSettings = append(initialSettings, http2Setting{ID: http2SettingMaxHeaderListSize, Val: max})
-	}
-	if maxHeaderTableSize != http2initialHeaderTableSize {
-		initialSettings = append(initialSettings, http2Setting{ID: http2SettingHeaderTableSize, Val: maxHeaderTableSize})
+
+	windowUpdateIncrement := uint32(http2transportDefaultConnFlow)
+	if t.t1.HasCustomWindowUpdate {
+		windowUpdateIncrement = t.t1.WindowUpdateIncrement
 	}
 
 	cc.bw.Write(http2clientPreface)
 	cc.fr.WriteSettings(initialSettings...)
-	cc.fr.WriteWindowUpdate(0, http2transportDefaultConnFlow)
+	cc.fr.WriteWindowUpdate(0, windowUpdateIncrement)
+	// cc.addStreamLocked()
+
+	if t.t1.HTTP2PriorityFrameSettings != nil {
+		if t.t1.HTTP2PriorityFrameSettings.HeaderFrame != nil {
+			cc.fr.HeaderPriority = &http2PriorityParam{
+				StreamDep: t.t1.HTTP2PriorityFrameSettings.HeaderFrame.StreamDep,
+				Exclusive: t.t1.HTTP2PriorityFrameSettings.HeaderFrame.Exclusive,
+				Weight:    t.t1.HTTP2PriorityFrameSettings.HeaderFrame.Weight,
+			}
+		}
+
+		for streamId, priority := range t.t1.HTTP2PriorityFrameSettings.PriorityFrames {
+			cc.mu.Lock()
+			cc.nextStreamID++
+			cc.mu.Unlock()
+			if priority == nil {
+				continue
+			}
+			cc.fr.WritePriority(uint32((streamId)), http2PriorityParam{
+				StreamDep: priority.StreamDep,
+				Exclusive: priority.Exclusive,
+				Weight:    priority.Weight,
+			})
+		}
+	}
+
 	cc.inflow.init(http2transportDefaultConnFlow + http2initialWindowSize)
 	cc.bw.Flush()
 	if cc.werr != nil {
@@ -8474,8 +8528,8 @@ func (cs *http2clientStream) writeRequest(req *Request) (err error) {
 	cc.mu.Unlock()
 
 	// TODO(bradfitz): this is a copy of the logic in net/http. Unify somewhere?
+	// Amendment: We are supporting encoding based on the header present in the request now, not just if the transport decided.
 	if !cc.t.disableCompression() &&
-		req.Header.Get("Accept-Encoding") == "" &&
 		req.Header.Get("Range") == "" &&
 		!cs.isHead {
 		// Request gzip only, not deflate. Deflate is ambiguous and
@@ -9019,6 +9073,11 @@ func (cc *http2ClientConn) encodeHeaders(req *Request, addGzipHeader bool, trail
 	// continue to reuse the hpack encoder for future requests)
 	for k, vv := range req.Header {
 		if !httpguts.ValidHeaderFieldName(k) {
+			// If the header is magic key, the headers would have been ordered
+			// by this step. It is ok to delete and not raise an error
+			if k == HeaderOrderKey || k == PHeaderOrderKey {
+				continue
+			}
 			return nil, fmt.Errorf("invalid HTTP header name %q", k)
 		}
 		for _, v := range vv {
@@ -9035,54 +9094,107 @@ func (cc *http2ClientConn) encodeHeaders(req *Request, addGzipHeader bool, trail
 		// target URI (the path-absolute production and optionally a '?' character
 		// followed by the query production, see Sections 3.3 and 3.4 of
 		// [RFC3986]).
-		f(":authority", host)
+		pHeaderOrder, ok := req.Header[PHeaderOrderKey]
 		m := req.Method
 		if m == "" {
 			m = MethodGet
 		}
-		f(":method", m)
-		if req.Method != "CONNECT" {
-			f(":path", path)
-			f(":scheme", req.URL.Scheme)
+		if ok {
+			// follow based on pseudo header order
+			for _, p := range pHeaderOrder {
+				switch p {
+				case ":authority":
+					f(":authority", host)
+				case ":method":
+					f(":method", req.Method)
+				case ":path":
+					if req.Method != "CONNECT" {
+						f(":path", path)
+					}
+				case ":scheme":
+					if req.Method != "CONNECT" {
+						f(":scheme", req.URL.Scheme)
+					}
+
+				// (zMrKrabz): Currently skips over unrecognized pheader fields,
+				// should throw error or something but works for now.
+				default:
+					continue
+				}
+			}
+		} else {
+			f(":authority", host)
+			f(":method", m)
+			if req.Method != "CONNECT" {
+				f(":path", path)
+				f(":scheme", req.URL.Scheme)
+			}
 		}
 		if trailers != "" {
 			f("trailer", trailers)
 		}
 
-		var didUA bool
-		for k, vv := range req.Header {
-			if http2asciiEqualFold(k, "host") || http2asciiEqualFold(k, "content-length") {
+		if http2shouldSendReqContentLength(req.Method, contentLength) {
+			req.Header.Set("content-length", strconv.FormatInt(contentLength, 10))
+		}
+
+		// Does not include accept-encoding header if its defined in req.Header
+		_, addGzipHeader = req.Header["accept-encoding"]
+		if !addGzipHeader { // presence check
+			req.Header.Set("accept-encoding", "gzip")
+			// we just aded it, set to true
+			addGzipHeader = true
+		} else {
+			// we didnt add it
+			addGzipHeader = false
+		}
+
+		UA, didUA := req.Header["user-agent"]
+		if didUA {
+			switch len(UA) {
+			case 0:
+				// Default to to default UA if none provided
+				req.Header.Set("user-agent", defaultUserAgent)
+			case 1:
+				// Don't do anything for UA provided as expected
+				break
+			default:
+				// Unexpected UA provided, only take first element
+				req.Header.Set("user-agent", UA[0])
+
+			}
+		}
+
+		var kvs []keyValues
+		if headerOrder, ok := req.Header[HeaderOrderKey]; ok {
+			order := make(map[string]int)
+			for i, v := range headerOrder {
+				order[v] = i
+			}
+
+			kvs, _ = req.Header.sortedKeyValuesBy(order, make(map[string]bool))
+		} else {
+			kvs, _ = req.Header.sortedKeyValues(make(map[string]bool))
+		}
+
+		for _, kv := range kvs {
+
+			if strings.EqualFold(kv.key, "host") {
 				// Host is :authority, already sent.
-				// Content-Length is automatic, set below.
 				continue
-			} else if http2asciiEqualFold(k, "connection") ||
-				http2asciiEqualFold(k, "proxy-connection") ||
-				http2asciiEqualFold(k, "transfer-encoding") ||
-				http2asciiEqualFold(k, "upgrade") ||
-				http2asciiEqualFold(k, "keep-alive") {
+			} else if strings.EqualFold(kv.key, "connection") || strings.EqualFold(kv.key, "proxy-connection") ||
+				strings.EqualFold(kv.key, "transfer-encoding") || strings.EqualFold(kv.key, "upgrade") ||
+				strings.EqualFold(kv.key, "keep-alive") {
 				// Per 8.1.2.2 Connection-Specific Header
 				// Fields, don't send connection-specific
 				// fields. We have already checked if any
 				// are error-worthy so just ignore the rest.
 				continue
-			} else if http2asciiEqualFold(k, "user-agent") {
-				// Match Go's http1 behavior: at most one
-				// User-Agent. If set to nil or empty string,
-				// then omit it. Otherwise if not mentioned,
-				// include the default (below).
-				didUA = true
-				if len(vv) < 1 {
-					continue
-				}
-				vv = vv[:1]
-				if vv[0] == "" {
-					continue
-				}
-			} else if http2asciiEqualFold(k, "cookie") {
+			} else if strings.EqualFold(kv.key, "cookie") {
 				// Per 8.1.2.5 To allow for better compression efficiency, the
 				// Cookie header field MAY be split into separate header fields,
 				// each with one or more cookie-pairs.
-				for _, v := range vv {
+				for _, v := range kv.values {
 					for {
 						p := strings.IndexByte(v, ';')
 						if p < 0 {
@@ -9101,17 +9213,25 @@ func (cc *http2ClientConn) encodeHeaders(req *Request, addGzipHeader bool, trail
 					}
 				}
 				continue
+			} else if strings.EqualFold(kv.key, "user-agent") {
+				// Match Go's http1 behavior: at most one
+				// User-Agent. If set to nil or empty string,
+				// then omit it. Otherwise if not mentioned,
+				// include the default (below).
+				didUA = true
+				if len(kv.values) > 1 {
+					kv.values = kv.values[:1]
+				}
+
+				if kv.values[0] == "" {
+					continue
+				}
+
 			}
 
-			for _, v := range vv {
-				f(k, v)
+			for _, v := range kv.values {
+				f(kv.key, v)
 			}
-		}
-		if http2shouldSendReqContentLength(req.Method, contentLength) {
-			f("content-length", strconv.FormatInt(contentLength, 10))
-		}
-		if addGzipHeader {
-			f("accept-encoding", "gzip")
 		}
 		if !didUA {
 			f("user-agent", http2defaultUserAgent)
@@ -9137,6 +9257,11 @@ func (cc *http2ClientConn) encodeHeaders(req *Request, addGzipHeader bool, trail
 
 	// Header list size is ok. Write the headers.
 	enumerateHeaders(func(name, value string) {
+		// skips over writing magic key headers
+		if name == PHeaderOrderKey || name == HeaderOrderKey {
+			return
+		}
+
 		name, ascii := http2lowerHeader(name)
 		if !ascii {
 			// Skip writing invalid headers. Per RFC 7540, Section 8.1.2, header
@@ -9606,11 +9731,17 @@ func (rl *http2clientConnReadLoop) handleResponse(cs *http2clientStream, f *http
 	cs.bytesRemain = res.ContentLength
 	res.Body = http2transportResponseBody{cs}
 
-	if cs.requestedGzip && http2asciiEqualFold(res.Header.Get("Content-Encoding"), "gzip") {
-		res.Header.Del("Content-Encoding")
+	// if cs.requestedGzip && http2asciiEqualFold(res.Header.Get("Content-Encoding"), "gzip") {
+	if cs.requestedGzip {
 		res.Header.Del("Content-Length")
 		res.ContentLength = -1
-		res.Body = &http2gzipReader{body: res.Body}
+		// res.Body = &http2gzipReader{body: res.Body}
+		res.Body = &DecompressorReader{
+			Reader: res.Body,
+			Registry: rl.cc.t.t1.DecompressionRegistry,
+			Order: strings.Split(res.Header.Get("Content-Encoding"), ","),
+		}
+		res.Header.Del("Content-Encoding")
 		res.Uncompressed = true
 	}
 	return res, nil

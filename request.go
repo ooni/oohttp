@@ -17,12 +17,13 @@ import (
 	"io"
 	"mime"
 	"mime/multipart"
-	"net/textproto"
 	"net/url"
 	urlpkg "net/url"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/ooni/oohttp/textproto"
 
 	httptrace "github.com/ooni/oohttp/httptrace"
 	ascii "github.com/ooni/oohttp/internal/ascii"
@@ -669,29 +670,23 @@ func (r *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, waitF
 	}
 
 	// Header lines
-	_, err = fmt.Fprintf(w, "Host: %s\r\n", host)
-	if err != nil {
-		return err
-	}
-	if trace != nil && trace.WroteHeaderField != nil {
-		trace.WroteHeaderField("Host", []string{host})
+	if _, ok := r.Header["Host"]; !ok {
+		if _, ok := r.Header["host"]; !ok {
+			r.Header.Set("Host", host)
+			if trace != nil && trace.WroteHeaderField != nil {
+				trace.WroteHeaderField("Host", []string{host})
+			}
+		}
 	}
 
 	// Use the defaultUserAgent unless the Header contains one, which
 	// may be blank to not send the header.
-	userAgent := defaultUserAgent
-	if r.Header.has("User-Agent") {
-		userAgent = r.Header.Get("User-Agent")
-	}
-	if userAgent != "" {
-		userAgent = headerNewlineToSpace.Replace(userAgent)
-		userAgent = textproto.TrimString(userAgent)
-		_, err = fmt.Fprintf(w, "User-Agent: %s\r\n", userAgent)
-		if err != nil {
-			return err
-		}
-		if trace != nil && trace.WroteHeaderField != nil {
-			trace.WroteHeaderField("User-Agent", []string{userAgent})
+	if _, ok := r.Header["User-Agent"]; !ok {
+		if _, ok := r.Header["user-agent"]; !ok {
+			r.Header.Set("User-Agent", defaultUserAgent)
+			if trace != nil && trace.WroteHeaderField != nil {
+				trace.WroteHeaderField("User-Agent", []string{defaultUserAgent})
+			}
 		}
 	}
 
@@ -700,21 +695,21 @@ func (r *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, waitF
 	if err != nil {
 		return err
 	}
-	err = tw.writeHeader(w, trace)
+	err = tw.addHeaders(&r.Header, trace)
 	if err != nil {
 		return err
 	}
 
-	err = r.Header.writeSubset(w, reqWriteExcludeHeader, trace)
-	if err != nil {
-		return err
-	}
-
+	// Make sure can be ordered too Accept-Encoding, Connection
 	if extraHeaders != nil {
-		err = extraHeaders.write(w, trace)
-		if err != nil {
-			return err
+		for key, values := range extraHeaders {
+			r.Header[key] = values
 		}
+	}
+
+	err = r.Header.write(w, trace)
+	if err != nil {
+		return err
 	}
 
 	_, err = io.WriteString(w, "\r\n")
