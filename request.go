@@ -670,28 +670,25 @@ func (r *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, waitF
 	}
 
 	// Header lines
-	if !r.Header.has("Host") {
-		r.Header.Set("Host", host)
-		if trace != nil && trace.WroteHeaderField != nil {
-			trace.WroteHeaderField("Host", []string{host})
+	if _, ok := r.Header["Host"]; !ok {
+		if _, ok := r.Header["host"]; !ok {
+			r.Header.Set("Host", host)
+			if trace != nil && trace.WroteHeaderField != nil {
+				trace.WroteHeaderField("Host", []string{host})
+			}
 		}
 	}
 
 	// Use the defaultUserAgent unless the Header contains one, which
 	// may be blank to not send the header.
-	userAgent := defaultUserAgent
-	if r.Header.has("User-Agent") {
-		userAgent = r.Header.Get("User-Agent")
-	}
-	if userAgent != "" {
-		userAgent = headerNewlineToSpace.Replace(userAgent)
-		userAgent = textproto.TrimString(userAgent)
-		r.Header.Set("User-Agent", userAgent)
-		if trace != nil && trace.WroteHeaderField != nil {
-			trace.WroteHeaderField("User-Agent", []string{userAgent})
+	if _, ok := r.Header["User-Agent"]; !ok {
+		if _, ok := r.Header["user-agent"]; !ok {
+			r.Header.Set("User-Agent", defaultUserAgent)
+			if trace != nil && trace.WroteHeaderField != nil {
+				trace.WroteHeaderField("User-Agent", []string{defaultUserAgent})
+			}
 		}
 	}
-
 
 	// Process Body,ContentLength,Close,Trailer
 	tw, err := newTransferWriter(r)
