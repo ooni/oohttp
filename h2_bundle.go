@@ -2999,8 +2999,8 @@ func (fr *http2Framer) readMetaFrame(hf *http2HeadersFrame) (http2Frame, error) 
 				log.Printf("http2: header list too large")
 			}
 			// It would be nice to send a RST_STREAM before sending the GOAWAY,
-			// but the struture of the server's frame writer makes this difficult.
-			return nil, http2ConnectionError(http2ErrCodeProtocol)
+			// but the structure of the server's frame writer makes this difficult.
+			return mh, http2ConnectionError(http2ErrCodeProtocol)
 		}
 
 		// Also close the connection after any CONTINUATION frame following an
@@ -3011,8 +3011,8 @@ func (fr *http2Framer) readMetaFrame(hf *http2HeadersFrame) (http2Frame, error) 
 				log.Printf("http2: invalid header: %v", invalid)
 			}
 			// It would be nice to send a RST_STREAM before sending the GOAWAY,
-			// but the struture of the server's frame writer makes this difficult.
-			return nil, http2ConnectionError(http2ErrCodeProtocol)
+			// but the structure of the server's frame writer makes this difficult.
+			return mh, http2ConnectionError(http2ErrCodeProtocol)
 		}
 
 		if _, err := hdec.Write(frag); err != nil {
