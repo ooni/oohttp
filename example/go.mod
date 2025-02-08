@@ -10,7 +10,7 @@ require (
 	github.com/dreadl0ck/tlsx v1.0.1-google-gopacket
 	github.com/google/go-cmp v0.6.0
 	github.com/google/martian/v3 v3.3.3
-	github.com/ooni/oohttp v0.8.0
+	github.com/ooni/oohttp v0.8.1
 	github.com/refraction-networking/utls v1.6.7
 	golang.org/x/net v0.31.0
 )
